@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Relatórios{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6">Relatórios</h1>
+
+<!-- Botão de Exportar Sempre Visível -->
+<div class="mb-6">
+  <a href="/api/reports/export" 
+     class="inline-flex items-center h-12 px-6 rounded-xl bg-indigo-700 text-white text-lg font-semibold hover:bg-indigo-800 transition-colors">
+    ⬇️ Exportar Excel
+  </a>
+</div>
+
+<!-- Resumo por Dia -->
+<div class="bg-white rounded-xl shadow mb-6">
+  <div class="p-6">
+    <h3 class="text-xl font-bold mb-4">Resumo das Vendas (Últimos 30 dias)</h3>
+    <div id="daily-summary" 
+         hx-get="/api/reports/summary" 
+         hx-trigger="load"
+         hx-target="this"
+         hx-swap="innerHTML">
+      <div class="flex justify-center py-8">
+        <div class="text-slate-400">Carregando...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Estatísticas Gerais -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+  <div class="bg-white rounded-xl shadow p-6">
+    <div class="flex items-center">
+      <div class="text-4xl mr-4">🎫</div>
+      <div>
+        <div class="text-slate-500 text-sm">Total de Ingressos</div>
+        <div id="total-tickets" class="text-2xl font-bold">Carregando...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-6">
+    <div class="flex items-center">
+      <div class="text-4xl mr-4">💰</div>
+      <div>
+        <div class="text-slate-500 text-sm">Faturamento Total</div>
+        <div id="total-revenue" class="text-2xl font-bold">Carregando...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-6">
+    <div class="flex items-center">
+      <div class="text-4xl mr-4">📅</div>
+      <div>
+        <div class="text-slate-500 text-sm">Dias com Vendas</div>
+        <div id="days-with-sales" class="text-2xl font-bold">Carregando...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Atualiza estatísticas quando os dados são carregados
+  document.body.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail.xhr.responseURL.includes('/api/reports/summary')) {
+      try {
+        const response = JSON.parse(evt.detail.xhr.responseText);
+        if (response.success && response.data) {
+          updateStatistics(response.data);
+        }
+      } catch (e) {
+        // Erro já tratado pelo HTMX
+      }
+    }
+  });
+  
+  function updateStatistics(data) {
+    const totalTickets = data.reduce((sum, day) => sum + day.ingressos, 0);
+    const totalRevenue = data.reduce((sum, day) => sum + day.total_reais, 0);
+    const daysWithSales = data.length;
+    
+    document.getElementById('total-tickets').textContent = totalTickets.toLocaleString('pt-BR');
+    document.getElementById('total-revenue').textContent = `R$ ${totalRevenue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+    document.getElementById('days-with-sales').textContent = daysWithSales;
+  }
+  
+  // Atualiza relatórios a cada 60 segundos
+  setInterval(() => {
+    htmx.trigger('#daily-summary', 'htmx:trigger');
+  }, 60000);
+</script>
+{% endblock %}

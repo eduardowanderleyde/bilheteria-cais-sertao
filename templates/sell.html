@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Vender Ingressos{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6">Vender Ingressos</h1>
+
+<form method="post" action="/sell" class="grid lg:grid-cols-3 gap-6">
+  <div class="bg-white rounded-xl p-6 shadow lg:col-span-2 space-y-4">
+
+    <!-- Qtd por tipo -->
+    <div class="grid sm:grid-cols-3 gap-3">
+      <div class="p-4 border rounded-xl">
+        <div class="font-semibold mb-1">Inteira (R$10)</div>
+        <input type="number" name="qtd_inteira" value="0" min="0" class="w-full h-12 border rounded px-3" id="qtd_inteira">
+      </div>
+      <div class="p-4 border rounded-xl">
+        <div class="font-semibold mb-1">Meia (R$5)</div>
+        <input type="number" name="qtd_meia" value="0" min="0" class="w-full h-12 border rounded px-3" id="qtd_meia">
+      </div>
+      <div class="p-4 border rounded-xl">
+        <div class="font-semibold mb-1">Gratuita (R$0)</div>
+        <input type="number" name="qtd_gratuita" value="0" min="0" class="w-full h-12 border rounded px-3" id="qtd_gratuita">
+      </div>
+    </div>
+
+    <!-- Dados opcionais -->
+    <div class="grid sm:grid-cols-3 gap-3">
+      <input name="name"  placeholder="Nome (opcional)" class="border rounded-lg px-3 h-12">
+      <input name="state" placeholder="UF"               class="border rounded-lg px-3 h-12">
+      <input name="city"  placeholder="Cidade"           class="border rounded-lg px-3 h-12">
+    </div>
+    <input name="note" placeholder="Observação" class="border rounded-lg px-3 h-12 w-full">
+  </div>
+
+  <div class="bg-white rounded-xl p-6 shadow">
+    <div class="text-slate-500 text-sm">Resumo</div>
+    <div class="text-2xl font-bold mt-2" id="previewTotal">R$ 0,00</div>
+    <div class="text-sm text-slate-600 mt-2" id="previewDetails">Selecione as quantidades</div>
+    <button type="submit" class="w-full h-14 mt-4 rounded-xl bg-emerald-700 text-white text-lg">
+      🛒 Registrar Venda
+    </button>
+    <a href="/dashboard" class="block text-center mt-3 text-slate-600 hover:text-slate-800">
+      ← Voltar ao Dashboard
+    </a>
+  </div>
+</form>
+
+<script>
+  const prices = { 'inteira': 10, 'meia': 5, 'gratuita': 0 };
+  
+  function updatePreview() {
+    const qtdInteira = parseInt(document.getElementById('qtd_inteira').value) || 0;
+    const qtdMeia = parseInt(document.getElementById('qtd_meia').value) || 0;
+    const qtdGratuita = parseInt(document.getElementById('qtd_gratuita').value) || 0;
+    
+    const totalInteira = qtdInteira * prices.inteira;
+    const totalMeia = qtdMeia * prices.meia;
+    const totalGratuita = qtdGratuita * prices.gratuita;
+    const total = totalInteira + totalMeia + totalGratuita;
+    
+    const totalQtd = qtdInteira + qtdMeia + qtdGratuita;
+    
+    document.getElementById('previewTotal').textContent = `R$ ${total.toFixed(2)}`;
+    
+    if (totalQtd > 0) {
+      let details = [];
+      if (qtdInteira > 0) details.push(`${qtdInteira} inteira(s)`);
+      if (qtdMeia > 0) details.push(`${qtdMeia} meia(s)`);
+      if (qtdGratuita > 0) details.push(`${qtdGratuita} gratuita(s)`);
+      document.getElementById('previewDetails').textContent = details.join(' + ');
+    } else {
+      document.getElementById('previewDetails').textContent = 'Selecione as quantidades';
+    }
+  }
+  
+  // Adiciona listeners para atualizar preview
+  document.getElementById('qtd_inteira').addEventListener('input', updatePreview);
+  document.getElementById('qtd_meia').addEventListener('input', updatePreview);
+  document.getElementById('qtd_gratuita').addEventListener('input', updatePreview);
+  
+  // Inicializa preview
+  updatePreview();
+</script>
+{% endblock %}

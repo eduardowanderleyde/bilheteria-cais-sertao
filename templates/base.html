@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{% block title %}{{ title or "Bilheteria" }}{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+  <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+  <!-- Se no_sidebar = True, centraliza; caso contrário, usa layout com sidebar -->
+  <div class="min-h-screen flex {{ 'items-center justify-center' if no_sidebar else '' }}">
+
+    {% if not no_sidebar %}
+    <aside class="hidden md:flex md:w-64 bg-white border-r">
+      <nav class="p-6 space-y-2 w-full">
+        <div class="text-lg font-bold mb-4">Bilheteria – Museu</div>
+        <a href="/dashboard" class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/dashboard' }}">🏠 Dashboard</a>
+        <a href="/sell"      class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/sell' }}">🛒 Vender</a>
+        <a href="/reports"   class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/reports' }}">📊 Relatórios</a>
+        <a href="/logout"    class="block px-3 py-3 rounded-lg hover:bg-red-50 text-red-700">↩️ Sair</a>
+      </nav>
+    </aside>
+    {% endif %}
+
+    <main class="{{ 'flex-1' if not no_sidebar else '' }}">
+      <div class="{{ 'max-w-7xl mx-auto p-4 md:p-8' if not no_sidebar else '' }}">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+</body>
+</html>
