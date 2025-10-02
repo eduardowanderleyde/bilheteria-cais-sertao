@@ -70,6 +70,64 @@ REASON_LABELS = {
     "policial_bombeiro_militar": "Policial/Bombeiro Militar"
 }
 
+def ensure_payment_method_column():
+    """Garante que a coluna payment_method existe na tabela orders"""
+    con = sqlite3.connect(DB)
+    cur = con.cursor()
+    cur.execute("PRAGMA table_info(orders);")
+    cols = [r[1] for r in cur.fetchall()]
+    if "payment_method" not in cols:
+        cur.execute("ALTER TABLE orders ADD COLUMN payment_method TEXT;")
+        con.commit()
+    con.close()
+
+def ensure_users():
+    """Garante que os usuários padrão existem com os papéis corretos"""
+    con = sqlite3.connect(DB)
+    cur = con.cursor()
+    
+    # Verifica se a coluna is_active existe
+    cur.execute("PRAGMA table_info(users);")
+    cols = [r[1] for r in cur.fetchall()]
+    if "is_active" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;")
+    
+    # Função para criar/atualizar usuário
+    def upsert_user(username, raw_password, role):
+        # Verifica se usuário existe
+        cur.execute("SELECT id FROM users WHERE username = ?", (username,))
+        user_exists = cur.fetchone()
+        
+        # Hash da senha
+        password_hash = bcrypt.hashpw(raw_password.encode(), bcrypt.gensalt())
+        
+        if user_exists:
+            # Atualiza usuário existente
+            cur.execute("""
+                UPDATE users 
+                SET password_hash = ?, role = ?, is_active = 1 
+                WHERE username = ?
+            """, (password_hash, role, username))
+        else:
+            # Cria novo usuário
+            cur.execute("""
+                INSERT INTO users(username, password_hash, role, is_active)
+                VALUES(?, ?, ?, 1)
+            """, (username, password_hash, role))
+    
+    # Cria/atualiza usuários padrão
+    upsert_user("***REMOVED***", "18091992123", "admin")
+    upsert_user("keila", "***REMOVED***", "gestora")
+    upsert_user("Evelyn", "***REMOVED***", "gestora")
+    upsert_user("bilheteira1", "Januario72", "bilheteira")
+    upsert_user("bilheteira2", "Januario72", "bilheteira")
+    
+    # Desativa funcionario1 antigo
+    cur.execute("UPDATE users SET is_active = 0 WHERE username = 'funcionario1'")
+    
+    con.commit()
+    con.close()
+
 def init_db():
     """Inicializa o banco de dados SQLite com nova arquitetura"""
     con = sqlite3.connect(DB)
@@ -78,13 +136,14 @@ def init_db():
     # Ativa WAL mode
     cur.execute("PRAGMA journal_mode=WAL;")
     
-    # Tabela de usuários (mantida)
+    # Tabela de usuários (atualizada com papéis e permissões)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users(
             id INTEGER PRIMARY KEY,
             username TEXT UNIQUE,
             password_hash BLOB,
-            role TEXT
+            role TEXT NOT NULL DEFAULT 'bilheteira',
+            is_active INTEGER NOT NULL DEFAULT 1
         );
     """)
     
@@ -183,10 +242,36 @@ def init_db():
     
     con.commit()
     con.close()
+    
+    # Garante que a coluna payment_method existe
+    ensure_payment_method_column()
+    
+    # Garante que os usuários padrão existem
+    ensure_users()
 
 def current_user(request: Request):
     """Retorna o usuário atual da sessão"""
-    return request.session.get(SESSION_KEY)
+    user_data = request.session.get(SESSION_KEY)
+    if isinstance(user_data, dict):
+        return user_data.get("username")
+    return user_data
+
+def require_role(request: Request, allowed_roles: set):
+    """Verifica se o usuário atual tem um dos papéis permitidos"""
+    user_data = request.session.get(SESSION_KEY)
+    if isinstance(user_data, dict):
+        return user_data.get("role") in allowed_roles
+    return False
+
+def get_user_info(request: Request):
+    """Retorna informações completas do usuário atual"""
+    user_data = request.session.get(SESSION_KEY)
+    if isinstance(user_data, dict):
+        return {
+            "username": user_data.get("username"),
+            "role": user_data.get("role")
+        }
+    return {"username": user_data}
 
 def price_for(ticket_type: str) -> int:
     """Retorna o preço em centavos para o tipo de ingresso"""
@@ -215,16 +300,20 @@ def login_page(request: Request):
 
 @app.post("/login")
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
-    """Processa o login"""
+    """Processa o login com verificação de papéis"""
     con = sqlite3.connect(DB)
     cur = con.cursor()
-    cur.execute("SELECT password_hash, role FROM users WHERE username=?", (username,))
+    cur.execute("SELECT password_hash, role FROM users WHERE username=? AND is_active=1", (username,))
     row = cur.fetchone()
     con.close()
 
     if row and bcrypt.checkpw(password.encode(), row[0]):
-        request.session[SESSION_KEY] = username
-        return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
+        # Salva informações completas do usuário na sessão
+        request.session[SESSION_KEY] = {
+            "username": username,
+            "role": row[1]
+        }
+        return RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)
     else:
         return templates.TemplateResponse(
             "login.html",
@@ -237,6 +326,14 @@ def logout(request: Request):
     """Logout do usuário"""
     request.session.pop(SESSION_KEY, None)
     return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
+
+@app.get("/unauthorized", response_class=HTMLResponse)
+def unauthorized(request: Request):
+    """Página de acesso negado"""
+    return templates.TemplateResponse("unauthorized.html", {
+        "request": request,
+        "no_sidebar": True
+    })
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
@@ -296,6 +393,30 @@ def dashboard(request: Request):
     """, (today,))
     gratuitas_hoje = cur.fetchone()[0] or 0
     
+    # Dados de pagamento hoje
+    cur.execute("""
+        SELECT o.payment_method, SUM(oi.qty * oi.unit_price_cents) as receita
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE DATE(o.created_at) = ? AND o.deleted_at IS NULL
+        GROUP BY o.payment_method
+    """, (today,))
+    pagamentos_hoje = cur.fetchall()
+    
+    # Calcula receita por forma de pagamento
+    credito_hoje = 0
+    debito_hoje = 0
+    pix_hoje = 0
+    
+    for metodo, receita in pagamentos_hoje:
+        receita_valor = (receita or 0) / 100
+        if metodo == 'credito':
+            credito_hoje = receita_valor
+        elif metodo == 'debito':
+            debito_hoje = receita_valor
+        elif metodo == 'pix':
+            pix_hoje = receita_valor
+    
     # Pedidos recentes do dia (últimas 10) - nova arquitetura
     cur.execute("""
         SELECT o.id, o.created_at, o.channel, o.state, o.city, o.note,
@@ -313,12 +434,15 @@ def dashboard(request: Request):
     
     return templates.TemplateResponse("dashboard.html", {
         "request": request, 
-        "user": {"username": user},
+        "user": get_user_info(request),
         "ingressos_hoje": ingressos_hoje,
         "receita_hoje": f"{receita_hoje:.2f}",
         "inteiras_hoje": inteiras_hoje,
         "meias_hoje": meias_hoje,
         "gratuitas_hoje": gratuitas_hoje,
+        "credito_hoje": f"{credito_hoje:.2f}",
+        "debito_hoje": f"{debito_hoje:.2f}",
+        "pix_hoje": f"{pix_hoje:.2f}",
         "pedidos_recentes": pedidos_recentes
     })
 
@@ -328,10 +452,9 @@ def sell_page(request: Request):
     if not current_user(request):
         return RedirectResponse("/login")
     
-    user = current_user(request)
     return templates.TemplateResponse("sell.html", {
         "request": request,
-        "user": {"username": user}
+        "user": get_user_info(request)
     })
 
 @app.get("/groups", response_class=HTMLResponse)
@@ -340,10 +463,9 @@ def groups_page(request: Request):
     if not current_user(request):
         return RedirectResponse("/login")
     
-    user = current_user(request)
     return templates.TemplateResponse("groups.html", {
         "request": request,
-        "user": {"username": user}
+        "user": get_user_info(request)
     })
 
 @app.post("/groups/new")
@@ -364,7 +486,8 @@ def create_group(
     qtd_gratuita: int = Form(0),
     reason_meia: Optional[str] = Form(None),
     reason_gratuita: Optional[str] = Form(None),
-    note: Optional[str] = Form(None)
+    note: Optional[str] = Form(None),
+    payment_method: str = Form(...)
 ):
     """Registra venda em grupo usando nova arquitetura"""
     if not current_user(request):
@@ -390,9 +513,9 @@ def create_group(
         # Cria o pedido (order) para grupo
         now = datetime.now().isoformat()
         cur.execute("""
-            INSERT INTO orders(created_at, operator_username, channel, state, city, note)
-            VALUES(?, ?, 'grupo', ?, ?, ?)
-        """, (now, user, state, city, note))
+            INSERT INTO orders(created_at, operator_username, channel, state, city, note, payment_method)
+            VALUES(?, ?, 'grupo', ?, ?, ?, ?)
+        """, (now, user, state, city, note, payment_method))
         
         order_id = cur.lastrowid
         
@@ -432,7 +555,8 @@ def sell_post(
     name: Optional[str] = Form(None),
     state: Optional[str] = Form(None),
     city: Optional[str] = Form(None),
-    note: Optional[str] = Form(None)
+    note: Optional[str] = Form(None),
+    payment_method: str = Form(...)
 ):
     """Registra venda com tipos mistos usando nova arquitetura"""
     if not current_user(request):
@@ -458,9 +582,9 @@ def sell_post(
         # Cria o pedido (order)
         now = datetime.now().isoformat()
         cur.execute("""
-            INSERT INTO orders(created_at, operator_username, channel, state, city, note)
-            VALUES(?, ?, 'balcao', ?, ?, ?)
-        """, (now, user, state, city, note))
+            INSERT INTO orders(created_at, operator_username, channel, state, city, note, payment_method)
+            VALUES(?, ?, 'balcao', ?, ?, ?, ?)
+        """, (now, user, state, city, note, payment_method))
         
         order_id = cur.lastrowid
         
@@ -482,9 +606,12 @@ def sell_post(
 
 @app.post("/orders/{order_id}/delete")
 def delete_order(request: Request, order_id: int):
-    """Soft delete de um pedido (apenas no mesmo dia)"""
+    """Soft delete de um pedido (apenas admin e gestora)"""
     if not current_user(request):
         return RedirectResponse("/login", status_code=303)
+    
+    if not require_role(request, {"admin", "gestora"}):
+        return RedirectResponse("/unauthorized", status_code=303)
     
     try:
         con = sqlite3.connect(DB)
@@ -723,13 +850,15 @@ def get_reports_summary(request: Request):
 
 @app.get("/api/reports/export")
 def export_reports(request: Request):
-    """Exporta relatório geral para Excel"""
+    """Exporta relatório geral para Excel com múltiplas abas"""
     if not current_user(request):
         raise HTTPException(status_code=401, detail="Não autenticado")
     
     try:
         con = sqlite3.connect(DB)
-        df = pd.read_sql_query("""
+        
+        # Aba 1: Visão Geral por Dia e Tipo
+        overview = pd.read_sql_query("""
             SELECT DATE(o.created_at) AS dia,
                    oi.ticket_type AS tipo,
                    SUM(oi.qty) AS quantidade,
@@ -740,9 +869,58 @@ def export_reports(request: Request):
             GROUP BY dia, ticket_type
             ORDER BY dia DESC, ticket_type;
         """, con)
+        
+        # Aba 2: Por UF
+        by_uf = pd.read_sql_query("""
+            SELECT COALESCE(o.state, 'Não informado') AS uf,
+                   SUM(oi.qty) AS ingressos,
+                   ROUND(SUM(oi.qty*oi.unit_price_cents)/100.0, 2) AS receita
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            WHERE o.deleted_at IS NULL
+            GROUP BY o.state
+            ORDER BY receita DESC;
+        """, con)
+        
+        # Aba 3: Por Tipo de Ingresso
+        by_type = pd.read_sql_query("""
+            SELECT oi.ticket_type AS tipo,
+                   SUM(oi.qty) AS ingressos,
+                   ROUND(SUM(oi.qty*oi.unit_price_cents)/100.0, 2) AS receita
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            WHERE o.deleted_at IS NULL
+            GROUP BY oi.ticket_type
+            ORDER BY receita DESC;
+        """, con)
+        
+        # Aba 4: Por Dia
+        by_day = pd.read_sql_query("""
+            SELECT DATE(o.created_at) AS dia,
+                   SUM(oi.qty) AS ingressos,
+                   ROUND(SUM(oi.qty*oi.unit_price_cents)/100.0, 2) AS receita
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            WHERE o.deleted_at IS NULL
+            GROUP BY DATE(o.created_at)
+            ORDER BY dia DESC;
+        """, con)
+        
+        # Aba 5: Por Forma de Pagamento (NOVA)
+        by_payment = pd.read_sql_query("""
+            SELECT COALESCE(o.payment_method, 'Não informado') AS forma_pagamento,
+                   SUM(oi.qty) AS ingressos,
+                   ROUND(SUM(oi.qty*oi.unit_price_cents)/100.0, 2) AS receita
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            WHERE o.deleted_at IS NULL
+            GROUP BY o.payment_method
+            ORDER BY receita DESC;
+        """, con)
+        
         con.close()
         
-        if df.empty:
+        if overview.empty:
             raise HTTPException(status_code=404, detail="Não há vendas para exportar")
         
         # Salva arquivo temporário
@@ -752,7 +930,13 @@ def export_reports(request: Request):
         # Cria diretório temp se não existir
         os.makedirs("temp", exist_ok=True)
         
-        df.to_excel(filepath, index=False)
+        # Cria Excel com múltiplas abas
+        with pd.ExcelWriter(filepath, engine='xlsxwriter') as writer:
+            overview.to_excel(writer, sheet_name='Visao_Geral', index=False)
+            by_uf.to_excel(writer, sheet_name='Por_UF', index=False)
+            by_type.to_excel(writer, sheet_name='Por_Tipo', index=False)
+            by_day.to_excel(writer, sheet_name='Por_Dia', index=False)
+            by_payment.to_excel(writer, sheet_name='Por_Pagamento', index=False)
         
         return FileResponse(
             path=filepath,
@@ -885,9 +1069,12 @@ def export_groups_reports(request: Request, start: Optional[str] = None, end: Op
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_home(request: Request):
-    """Página inicial do admin"""
+    """Página inicial do admin (apenas admin e gestora)"""
     if not current_user(request):
         return RedirectResponse("/login")
+    
+    if not require_role(request, {"admin", "gestora"}):
+        return RedirectResponse("/unauthorized", status_code=303)
     
     user = current_user(request)
     return templates.TemplateResponse("admin_home.html", {
@@ -898,9 +1085,12 @@ def admin_home(request: Request):
 @app.get("/admin/orders", response_class=HTMLResponse)
 def admin_orders(request: Request, start_date: Optional[str] = None, end_date: Optional[str] = None, 
                  state: Optional[str] = None, q: Optional[str] = None, page: int = 1):
-    """Lista de pedidos para administração"""
+    """Lista de pedidos para administração (apenas admin e gestora)"""
     if not current_user(request):
         return RedirectResponse("/login")
+    
+    if not require_role(request, {"admin", "gestora"}):
+        return RedirectResponse("/unauthorized", status_code=303)
     
     user = current_user(request)
     
@@ -987,9 +1177,12 @@ def admin_orders(request: Request, start_date: Optional[str] = None, end_date: O
 @app.get("/admin/groups", response_class=HTMLResponse)
 def admin_groups(request: Request, start_date: Optional[str] = None, end_date: Optional[str] = None, 
                  state: Optional[str] = None, q: Optional[str] = None, page: int = 1):
-    """Lista de grupos para administração"""
+    """Lista de grupos para administração (apenas admin e gestora)"""
     if not current_user(request):
         return RedirectResponse("/login")
+    
+    if not require_role(request, {"admin", "gestora"}):
+        return RedirectResponse("/unauthorized", status_code=303)
     
     user = current_user(request)
     
@@ -1075,9 +1268,12 @@ def admin_groups(request: Request, start_date: Optional[str] = None, end_date: O
 
 @app.get("/admin/orders/{order_id}/edit", response_class=HTMLResponse)
 def admin_order_edit(request: Request, order_id: int):
-    """Formulário de edição de pedido"""
+    """Formulário de edição de pedido (apenas admin e gestora)"""
     if not current_user(request):
         return RedirectResponse("/login")
+    
+    if not require_role(request, {"admin", "gestora"}):
+        return RedirectResponse("/unauthorized", status_code=303)
     
     user = current_user(request)
     
@@ -1206,9 +1402,12 @@ def admin_order_update(request: Request, order_id: int,
 
 @app.post("/admin/orders/{order_id}/delete")
 def admin_order_delete(request: Request, order_id: int, reason: str = Form("")):
-    """Exclusão soft de pedido"""
+    """Exclusão soft de pedido (apenas admin e gestora)"""
     if not current_user(request):
         return RedirectResponse("/login", status_code=303)
+    
+    if not require_role(request, {"admin", "gestora"}):
+        return RedirectResponse("/unauthorized", status_code=303)
     
     user = current_user(request)
     
@@ -1243,9 +1442,12 @@ def admin_order_delete(request: Request, order_id: int, reason: str = Form("")):
 
 @app.post("/admin/groups/{group_id}/delete")
 def admin_group_delete(request: Request, group_id: int, reason: str = Form("")):
-    """Exclusão soft de grupo"""
+    """Exclusão soft de grupo (apenas admin e gestora)"""
     if not current_user(request):
         return RedirectResponse("/login", status_code=303)
+    
+    if not require_role(request, {"admin", "gestora"}):
+        return RedirectResponse("/unauthorized", status_code=303)
     
     user = current_user(request)
     
