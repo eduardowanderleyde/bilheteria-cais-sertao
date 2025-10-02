@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% set active = "admin" %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6">Admin - Gestão</h1>
+
+<!-- Navegação de Admin -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+  <a href="/admin/orders" class="bg-white rounded-xl p-8 shadow hover:shadow-lg transition-shadow text-center">
+    <div class="text-6xl mb-4">🛒</div>
+    <h3 class="text-2xl font-bold mb-2">Pedidos</h3>
+    <p class="text-slate-600">Gerenciar vendas individuais</p>
+  </a>
+  
+  <a href="/admin/groups" class="bg-white rounded-xl p-8 shadow hover:shadow-lg transition-shadow text-center">
+    <div class="text-6xl mb-4">👥</div>
+    <h3 class="text-2xl font-bold mb-2">Grupos</h3>
+    <p class="text-slate-600">Gerenciar visitas em grupo</p>
+  </a>
+</div>
+
+<!-- Informações de Segurança -->
+<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
+  <h3 class="text-lg font-bold text-yellow-800 mb-2">⚠️ Informações de Segurança</h3>
+  <ul class="text-yellow-700 space-y-1">
+    <li>• Todas as exclusões são <strong>soft delete</strong> (dados preservados)</li>
+    <li>• Todas as ações são <strong>logadas</strong> para auditoria</li>
+    <li>• Edições e exclusões são <strong>reversíveis</strong></li>
+    <li>• Relatórios ignoram registros excluídos automaticamente</li>
+  </ul>
+</div>
+{% endblock %}
+

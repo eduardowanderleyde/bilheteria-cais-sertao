@@ -18,10 +18,12 @@
     <aside class="hidden md:flex md:w-64 bg-white border-r">
       <nav class="p-6 space-y-2 w-full">
         <div class="text-lg font-bold mb-4">Bilheteria – Museu</div>
-        <a href="/dashboard" class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/dashboard' }}">🏠 Dashboard</a>
-        <a href="/sell"      class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/sell' }}">🛒 Vender</a>
-        <a href="/reports"   class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/reports' }}">📊 Relatórios</a>
-        <a href="/logout"    class="block px-3 py-3 rounded-lg hover:bg-red-50 text-red-700">↩️ Sair</a>
+             <a href="/dashboard" class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/dashboard' }}">🏠 Dashboard</a>
+             <a href="/sell"      class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/sell' }}">🛒 Vender</a>
+             <a href="/groups"   class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/groups' }}">👥 Grupos</a>
+             <a href="/reports"   class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/reports' }}">📊 Relatórios</a>
+             <a href="/admin"     class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path.startswith('/admin') }}">⚙️ Admin</a>
+             <a href="/logout"    class="block px-3 py-3 rounded-lg hover:bg-red-50 text-red-700">↩️ Sair</a>
       </nav>
     </aside>
     {% endif %}

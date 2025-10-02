@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% set active = "reports" %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6">Relatórios de Grupos</h1>
+
+<!-- Filtros -->
+<div class="bg-white rounded-xl p-6 shadow mb-6">
+  <h2 class="text-xl font-bold mb-4">Filtros</h2>
+  <form method="get" class="grid sm:grid-cols-4 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Data Início</label>
+      <input name="start_date" type="date" value="{{ start_date or '' }}" class="w-full h-12 border rounded-lg px-3">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Data Fim</label>
+      <input name="end_date" type="date" value="{{ end_date or '' }}" class="w-full h-12 border rounded-lg px-3">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Visita</label>
+      <select name="visit_type" class="w-full h-12 border rounded-lg px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white border-slate-300">
+        <option value="">Todos os tipos</option>
+        <option value="agendada">Agendada</option>
+        <option value="espontanea">Espontânea</option>
+      </select>
+    </div>
+    <div class="flex items-end">
+      <button type="submit" class="w-full h-12 bg-indigo-600 text-white rounded-lg">Filtrar</button>
+    </div>
+  </form>
+</div>
+
+<!-- Relatório de Grupos -->
+<div class="bg-white rounded-xl shadow mb-6">
+  <div class="p-6">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold">Grupos por Período</h2>
+      <a href="/api/reports/groups/export?start={{ start_date or '' }}&end={{ end_date or '' }}&visit_type={{ visit_type or '' }}" 
+         class="inline-flex items-center h-10 px-4 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700">
+        ⬇️ Exportar Excel
+      </a>
+    </div>
+    
+    {% if groups_data %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b">
+            <th class="text-left py-2">Data</th>
+            <th class="text-left py-2">Tipo</th>
+            <th class="text-left py-2">Ofício</th>
+            <th class="text-left py-2">Instituição</th>
+            <th class="text-left py-2">Responsável</th>
+            <th class="text-left py-2">UF/Cidade</th>
+            <th class="text-left py-2">Estudantes</th>
+            <th class="text-left py-2">Professores</th>
+            <th class="text-left py-2">Receita</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for grupo in groups_data %}
+          <tr class="border-b hover:bg-gray-50">
+            <td class="py-2">{{ grupo[0] }}</td>
+            <td class="py-2">
+              <span class="px-2 py-1 rounded text-xs font-medium
+                {% if grupo[1] == 'agendada' %}bg-green-100 text-green-800
+                {% else %}bg-blue-100 text-blue-800{% endif %}">
+                {{ grupo[1].title() }}
+              </span>
+            </td>
+            <td class="py-2">
+              {% if grupo[2] %}
+                <span class="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">Sim</span>
+              {% else %}
+                <span class="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">Não</span>
+              {% endif %}
+            </td>
+            <td class="py-2">{{ grupo[3] or '-' }}</td>
+            <td class="py-2">{{ grupo[4] or '-' }}</td>
+            <td class="py-2">{{ grupo[5] or '-' }}{% if grupo[6] %} / {{ grupo[6] }}{% endif %}</td>
+            <td class="py-2">{{ grupo[7] or 0 }}</td>
+            <td class="py-2">{{ grupo[8] or 0 }}</td>
+            <td class="py-2">R$ {{ grupo[9] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-8 text-gray-500">
+      Nenhum grupo encontrado no período
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Resumo Estatístico -->
+{% if groups_data %}
+<div class="bg-white rounded-xl shadow mb-6">
+  <div class="p-6">
+    <h2 class="text-xl font-bold mb-4">Resumo Estatístico</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div class="bg-slate-50 p-4 rounded-lg text-center">
+        <div class="text-2xl font-bold text-blue-600">{{ groups_data|length }}</div>
+        <div class="text-sm text-slate-600">Total de Grupos</div>
+      </div>
+      <div class="bg-slate-50 p-4 rounded-lg text-center">
+        <div class="text-2xl font-bold text-green-600">{{ groups_data|selectattr('1', 'equalto', 'agendada')|list|length }}</div>
+        <div class="text-sm text-slate-600">Agendados</div>
+      </div>
+      <div class="bg-slate-50 p-4 rounded-lg text-center">
+        <div class="text-2xl font-bold text-purple-600">{{ groups_data|selectattr('1', 'equalto', 'espontanea')|list|length }}</div>
+        <div class="text-sm text-slate-600">Espontâneos</div>
+      </div>
+      <div class="bg-slate-50 p-4 rounded-lg text-center">
+        <div class="text-2xl font-bold text-orange-600">R$ {{ groups_data|sum(attribute='9') }}</div>
+        <div class="text-sm text-slate-600">Receita Total</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<a href="/reports" class="block text-center mt-6 text-slate-600">← Voltar aos Relatórios</a>
+{% endblock %}

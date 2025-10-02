@@ -29,15 +29,56 @@ DB = "bilheteria.db"
 # Chave da sessão
 SESSION_KEY = "session_user"
 
+# Motivos para meia entrada
+MEIA_REASONS = [
+    "idoso",
+    "professor_ins_particular", 
+    "estudante_ins_particular",
+    "pcd_acompanhante",
+    "doador_sangue",
+    "enfermagem"
+]
+
+# Motivos para gratuidade
+GRAT_REASONS = [
+    "estudante_rede_publica",
+    "professor_ins_publica", 
+    "guia_turismo",
+    "crianca_0_5",
+    "politica_gratuidade",
+    "funcionario_museu",
+    "policial_bombeiro_militar"
+]
+
+# Labels bonitas para os motivos
+REASON_LABELS = {
+    # Meia entrada
+    "idoso": "Idoso (60+)",
+    "professor_ins_particular": "Professor - Instituição Particular",
+    "estudante_ins_particular": "Estudante - Instituição Particular", 
+    "pcd_acompanhante": "PCD + Acompanhante",
+    "doador_sangue": "Doador de Sangue",
+    "enfermagem": "Profissional de Enfermagem",
+    
+    # Gratuidade
+    "estudante_rede_publica": "Estudante - Rede Pública",
+    "professor_ins_publica": "Professor - Instituição Pública",
+    "guia_turismo": "Guia de Turismo",
+    "crianca_0_5": "Criança 0-5 anos",
+    "politica_gratuidade": "Política de Gratuidade",
+    "funcionario_museu": "Funcionário do Museu",
+    "policial_bombeiro_militar": "Policial/Bombeiro Militar"
+}
+
 def init_db():
-    """Inicializa o banco de dados SQLite"""
+    """Inicializa o banco de dados SQLite com nova arquitetura"""
     con = sqlite3.connect(DB)
     cur = con.cursor()
     
     # Ativa WAL mode
     cur.execute("PRAGMA journal_mode=WAL;")
     
-    # Tabela de usuários
+    # Tabela de usuários (mantida)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users(
             id INTEGER PRIMARY KEY,
@@ -47,7 +88,66 @@ def init_db():
         );
     """)
     
-    # Tabela de vendas
+    # NOVA ARQUITETURA: Tabela de pedidos (cabeçalho)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS orders(
+            id INTEGER PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            operator_username TEXT NOT NULL,
+            channel TEXT NOT NULL DEFAULT 'balcao',
+            state TEXT,
+            city TEXT,
+            note TEXT,
+            deleted_at TEXT NULL
+        );
+    """)
+    
+    # NOVA ARQUITETURA: Tabela de itens do pedido
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS order_items(
+            id INTEGER PRIMARY KEY,
+            order_id INTEGER NOT NULL,
+            ticket_type TEXT NOT NULL,
+            qty INTEGER NOT NULL,
+            unit_price_cents INTEGER NOT NULL,
+            reason TEXT NULL,
+            FOREIGN KEY (order_id) REFERENCES orders(id)
+        );
+    """)
+    
+    # NOVA ARQUITETURA: Tabela de grupos (metadados de visita em grupo)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS groups(
+            id INTEGER PRIMARY KEY,
+            order_id INTEGER NOT NULL,
+            visit_type TEXT NOT NULL,
+            has_oficio INTEGER NOT NULL DEFAULT 0,
+            institution_name TEXT,
+            total_students INTEGER DEFAULT 0,
+            total_teachers INTEGER DEFAULT 0,
+            responsible_name TEXT,
+            state TEXT,
+            city TEXT,
+            ies_municipio TEXT,
+            scheduled_date TEXT NULL,
+            FOREIGN KEY (order_id) REFERENCES orders(id)
+        );
+    """)
+    
+    # NOVA ARQUITETURA: Tabela de auditoria (log de eventos)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS order_events(
+            id INTEGER PRIMARY KEY,
+            order_id INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            who TEXT NOT NULL,
+            when_created TEXT NOT NULL,
+            reason TEXT NULL,
+            FOREIGN KEY (order_id) REFERENCES orders(id)
+        );
+    """)
+    
+    # Tabela de vendas (legacy - mantida para compatibilidade)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS sales(
             id INTEGER PRIMARY KEY,
@@ -63,7 +163,14 @@ def init_db():
         );
     """)
     
-    # Índices
+    # Índices para performance
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_channel ON orders(channel);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_state_city ON orders(state, city);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_items_order_id ON order_items(order_id);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_items_ticket_type ON order_items(ticket_type);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_groups_order_id ON groups(order_id);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_order_events_order_id ON order_events(order_id);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(sold_at);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_type ON sales(ticket_type);")
     
@@ -133,46 +240,74 @@ def logout(request: Request):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
-    """Dashboard principal"""
+    """Dashboard principal usando nova arquitetura"""
     if not current_user(request):
         return RedirectResponse("/login")
     
     user = current_user(request)
     
-    # Busca dados do dia atual
+    # Busca dados do dia atual usando nova arquitetura
     today = datetime.now().strftime('%Y-%m-%d')
     con = sqlite3.connect(DB)
     cur = con.cursor()
     
-    # Total de ingressos hoje
-    cur.execute("SELECT SUM(qty) FROM sales WHERE date(sold_at) = ?", (today,))
+    # Total de ingressos hoje (nova arquitetura)
+    cur.execute("""
+        SELECT SUM(oi.qty) 
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE DATE(o.created_at) = ? AND o.deleted_at IS NULL
+    """, (today,))
     ingressos_hoje = cur.fetchone()[0] or 0
     
-    # Receita hoje
-    cur.execute("SELECT SUM(qty * unit_price_cents) FROM sales WHERE date(sold_at) = ?", (today,))
+    # Receita hoje (nova arquitetura)
+    cur.execute("""
+        SELECT SUM(oi.qty * oi.unit_price_cents) 
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE DATE(o.created_at) = ? AND o.deleted_at IS NULL
+    """, (today,))
     receita_hoje = (cur.fetchone()[0] or 0) / 100
     
-    # Inteiras hoje
-    cur.execute("SELECT SUM(qty) FROM sales WHERE date(sold_at) = ? AND ticket_type = 'inteira'", (today,))
+    # Inteiras hoje (nova arquitetura)
+    cur.execute("""
+        SELECT SUM(oi.qty) 
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE DATE(o.created_at) = ? AND oi.ticket_type = 'inteira' AND o.deleted_at IS NULL
+    """, (today,))
     inteiras_hoje = cur.fetchone()[0] or 0
     
-    # Meias hoje
-    cur.execute("SELECT SUM(qty) FROM sales WHERE date(sold_at) = ? AND ticket_type = 'meia'", (today,))
+    # Meias hoje (nova arquitetura)
+    cur.execute("""
+        SELECT SUM(oi.qty) 
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE DATE(o.created_at) = ? AND oi.ticket_type = 'meia' AND o.deleted_at IS NULL
+    """, (today,))
     meias_hoje = cur.fetchone()[0] or 0
     
-    # Gratuitas hoje
-    cur.execute("SELECT SUM(qty) FROM sales WHERE date(sold_at) = ? AND ticket_type = 'gratuita'", (today,))
+    # Gratuitas hoje (nova arquitetura)
+    cur.execute("""
+        SELECT SUM(oi.qty) 
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE DATE(o.created_at) = ? AND oi.ticket_type = 'gratuita' AND o.deleted_at IS NULL
+    """, (today,))
     gratuitas_hoje = cur.fetchone()[0] or 0
     
-    # Vendas recentes do dia (últimas 10)
+    # Pedidos recentes do dia (últimas 10) - nova arquitetura
     cur.execute("""
-        SELECT id, ticket_type, qty, unit_price_cents, name, sold_at 
-        FROM sales 
-        WHERE date(sold_at) = ? 
-        ORDER BY sold_at DESC 
+        SELECT o.id, o.created_at, o.channel, o.state, o.city, o.note,
+               GROUP_CONCAT(oi.ticket_type || ':' || oi.qty, ', ') as items
+        FROM orders o
+        LEFT JOIN order_items oi ON oi.order_id = o.id
+        WHERE DATE(o.created_at) = ? AND o.deleted_at IS NULL
+        GROUP BY o.id
+        ORDER BY o.created_at DESC 
         LIMIT 10
     """, (today,))
-    vendas_recentes = cur.fetchall()
+    pedidos_recentes = cur.fetchall()
     
     con.close()
     
@@ -184,12 +319,12 @@ def dashboard(request: Request):
         "inteiras_hoje": inteiras_hoje,
         "meias_hoje": meias_hoje,
         "gratuitas_hoje": gratuitas_hoje,
-        "vendas_recentes": vendas_recentes
+        "pedidos_recentes": pedidos_recentes
     })
 
 @app.get("/sell", response_class=HTMLResponse)
 def sell_page(request: Request):
-    """Página de vendas"""
+    """Página de vendas individuais"""
     if not current_user(request):
         return RedirectResponse("/login")
     
@@ -199,46 +334,143 @@ def sell_page(request: Request):
         "user": {"username": user}
     })
 
+@app.get("/groups", response_class=HTMLResponse)
+def groups_page(request: Request):
+    """Página de vendas em grupo"""
+    if not current_user(request):
+        return RedirectResponse("/login")
+    
+    user = current_user(request)
+    return templates.TemplateResponse("groups.html", {
+        "request": request,
+        "user": {"username": user}
+    })
+
+@app.post("/groups/new")
+def create_group(
+    request: Request,
+    visit_type: str = Form(...),
+    has_oficio: int = Form(...),
+    institution_name: str = Form(...),
+    responsible_name: str = Form(...),
+    state: Optional[str] = Form(None),
+    city: Optional[str] = Form(None),
+    ies_municipio: Optional[str] = Form(None),
+    scheduled_date: Optional[str] = Form(None),
+    total_students: int = Form(0),
+    total_teachers: int = Form(0),
+    qtd_inteira: int = Form(0),
+    qtd_meia: int = Form(0),
+    qtd_gratuita: int = Form(0),
+    reason_meia: Optional[str] = Form(None),
+    reason_gratuita: Optional[str] = Form(None),
+    note: Optional[str] = Form(None)
+):
+    """Registra venda em grupo usando nova arquitetura"""
+    if not current_user(request):
+        return RedirectResponse("/login", status_code=303)
+    
+    user = current_user(request)
+    
+    # Define os itens com quantidades, preços e motivos
+    items = [
+        ("inteira", qtd_inteira, 1000, None),
+        ("meia", qtd_meia, 500, reason_meia),
+        ("gratuita", qtd_gratuita, 0, reason_gratuita),
+    ]
+    
+    # Verifica se pelo menos um item foi selecionado
+    if sum(q for _, q, _, _ in items) <= 0:
+        return RedirectResponse("/groups", status_code=303)
+    
+    try:
+        con = sqlite3.connect(DB)
+        cur = con.cursor()
+        
+        # Cria o pedido (order) para grupo
+        now = datetime.now().isoformat()
+        cur.execute("""
+            INSERT INTO orders(created_at, operator_username, channel, state, city, note)
+            VALUES(?, ?, 'grupo', ?, ?, ?)
+        """, (now, user, state, city, note))
+        
+        order_id = cur.lastrowid
+        
+        # Insere os itens do pedido
+        for tipo, qtd, preco, motivo in items:
+            if qtd and qtd > 0:
+                cur.execute("""
+                    INSERT INTO order_items(order_id, ticket_type, qty, unit_price_cents, reason)
+                    VALUES(?, ?, ?, ?, ?)
+                """, (order_id, tipo, qtd, preco, motivo))
+        
+        # Insere os dados do grupo
+        cur.execute("""
+            INSERT INTO groups(order_id, visit_type, has_oficio, institution_name, 
+                             total_students, total_teachers, responsible_name, 
+                             state, city, ies_municipio, scheduled_date)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (order_id, visit_type, has_oficio, institution_name, total_students, 
+              total_teachers, responsible_name, state, city, ies_municipio, scheduled_date))
+        
+        con.commit()
+        con.close()
+        
+        return RedirectResponse("/dashboard", status_code=303)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar grupo: {str(e)}")
+
 @app.post("/sell")
 def sell_post(
     request: Request,
     qtd_inteira: int = Form(0),
     qtd_meia: int = Form(0),
     qtd_gratuita: int = Form(0),
+    reason_meia: Optional[str] = Form(None),
+    reason_gratuita: Optional[str] = Form(None),
     name: Optional[str] = Form(None),
     state: Optional[str] = Form(None),
     city: Optional[str] = Form(None),
     note: Optional[str] = Form(None)
 ):
-    """Registra venda com tipos mistos"""
+    """Registra venda com tipos mistos usando nova arquitetura"""
     if not current_user(request):
         return RedirectResponse("/login", status_code=303)
     
     user = current_user(request)
     
-    # Define os itens com quantidades e preços
+    # Define os itens com quantidades, preços e motivos
     items = [
-        ("inteira", qtd_inteira, 1000),
-        ("meia", qtd_meia, 500),
-        ("gratuita", qtd_gratuita, 0),
+        ("inteira", qtd_inteira, 1000, None),
+        ("meia", qtd_meia, 500, reason_meia),
+        ("gratuita", qtd_gratuita, 0, reason_gratuita),
     ]
     
     # Verifica se pelo menos um item foi selecionado
-    if sum(q for _, q, _ in items) <= 0:
+    if sum(q for _, q, _, _ in items) <= 0:
         return RedirectResponse("/sell", status_code=303)
     
     try:
         con = sqlite3.connect(DB)
         cur = con.cursor()
         
-        # Insere uma linha para cada tipo com quantidade > 0
+        # Cria o pedido (order)
         now = datetime.now().isoformat()
-        for tipo, qtd, preco in items:
+        cur.execute("""
+            INSERT INTO orders(created_at, operator_username, channel, state, city, note)
+            VALUES(?, ?, 'balcao', ?, ?, ?)
+        """, (now, user, state, city, note))
+        
+        order_id = cur.lastrowid
+        
+        # Insere os itens do pedido
+        for tipo, qtd, preco, motivo in items:
             if qtd and qtd > 0:
                 cur.execute("""
-                    INSERT INTO sales(sold_at, ticket_type, qty, unit_price_cents, operator_username, name, state, city, note)
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (now, tipo, qtd, preco, user, name, state, city, note))
+                    INSERT INTO order_items(order_id, ticket_type, qty, unit_price_cents, reason)
+                    VALUES(?, ?, ?, ?, ?)
+                """, (order_id, tipo, qtd, preco, motivo))
         
         con.commit()
         con.close()
@@ -248,9 +480,9 @@ def sell_post(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao salvar venda: {str(e)}")
 
-@app.post("/delete_sale/{sale_id}")
-def delete_sale(request: Request, sale_id: int):
-    """Exclui uma venda (apenas no mesmo dia)"""
+@app.post("/orders/{order_id}/delete")
+def delete_order(request: Request, order_id: int):
+    """Soft delete de um pedido (apenas no mesmo dia)"""
     if not current_user(request):
         return RedirectResponse("/login", status_code=303)
     
@@ -258,29 +490,30 @@ def delete_sale(request: Request, sale_id: int):
         con = sqlite3.connect(DB)
         cur = con.cursor()
         
-        # Verifica se a venda existe e é do dia atual
+        # Verifica se o pedido existe e é do dia atual
         today = datetime.now().strftime('%Y-%m-%d')
         cur.execute("""
-            SELECT id, sold_at FROM sales 
-            WHERE id = ? AND date(sold_at) = ?
-        """, (sale_id, today))
+            SELECT id, created_at FROM orders 
+            WHERE id = ? AND DATE(created_at) = ? AND deleted_at IS NULL
+        """, (order_id, today))
         
-        sale = cur.fetchone()
-        if not sale:
+        order = cur.fetchone()
+        if not order:
             con.close()
-            raise HTTPException(status_code=404, detail="Venda não encontrada ou não pode ser excluída")
+            raise HTTPException(status_code=404, detail="Pedido não encontrado ou não pode ser excluído")
         
-        # Exclui a venda
-        cur.execute("DELETE FROM sales WHERE id = ?", (sale_id,))
+        # Soft delete - marca como deletado
+        now = datetime.now().isoformat()
+        cur.execute("UPDATE orders SET deleted_at = ? WHERE id = ?", (now, order_id))
         con.commit()
         con.close()
         
-        return RedirectResponse("/reports", status_code=303)
+        return RedirectResponse("/dashboard", status_code=303)
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao excluir venda: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir pedido: {str(e)}")
 
 @app.post("/api/sell")
 async def register_sale(
@@ -329,19 +562,142 @@ def reports_page(request: Request):
         "user": {"username": user}
     })
 
+@app.get("/reports/reasons", response_class=HTMLResponse)
+def reports_reasons_page(request: Request, start_date: Optional[str] = None, end_date: Optional[str] = None, state: Optional[str] = None):
+    """Página de relatórios por motivos"""
+    if not current_user(request):
+        return RedirectResponse("/login")
+    
+    user = current_user(request)
+    
+    # Busca dados de meias por motivo
+    con = sqlite3.connect(DB)
+    cur = con.cursor()
+    
+    # Query para meias por motivo
+    meias_query = """
+        SELECT oi.reason, SUM(oi.qty) as qtd, ROUND(SUM(oi.qty * oi.unit_price_cents)/100.0, 2) as receita
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE oi.ticket_type = 'meia' AND o.deleted_at IS NULL
+    """
+    params = []
+    
+    if start_date:
+        meias_query += " AND DATE(o.created_at) >= ?"
+        params.append(start_date)
+    if end_date:
+        meias_query += " AND DATE(o.created_at) <= ?"
+        params.append(end_date)
+    if state:
+        meias_query += " AND o.state = ?"
+        params.append(state)
+    
+    meias_query += " GROUP BY oi.reason ORDER BY qtd DESC"
+    
+    cur.execute(meias_query, params)
+    meias_reasons = cur.fetchall()
+    
+    # Query para gratuitas por motivo
+    gratuitas_query = """
+        SELECT oi.reason, SUM(oi.qty) as qtd
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE oi.ticket_type = 'gratuita' AND o.deleted_at IS NULL
+    """
+    params_gratuitas = []
+    
+    if start_date:
+        gratuitas_query += " AND DATE(o.created_at) >= ?"
+        params_gratuitas.append(start_date)
+    if end_date:
+        gratuitas_query += " AND DATE(o.created_at) <= ?"
+        params_gratuitas.append(end_date)
+    if state:
+        gratuitas_query += " AND o.state = ?"
+        params_gratuitas.append(state)
+    
+    gratuitas_query += " GROUP BY oi.reason ORDER BY qtd DESC"
+    
+    cur.execute(gratuitas_query, params_gratuitas)
+    gratuitas_reasons = cur.fetchall()
+    
+    con.close()
+    
+    return templates.TemplateResponse("reports_reasons.html", {
+        "request": request,
+        "user": {"username": user},
+        "start_date": start_date,
+        "end_date": end_date,
+        "state": state,
+        "meias_reasons": meias_reasons,
+        "gratuitas_reasons": gratuitas_reasons
+    })
+
+@app.get("/reports/groups", response_class=HTMLResponse)
+def reports_groups_page(request: Request, start_date: Optional[str] = None, end_date: Optional[str] = None, visit_type: Optional[str] = None):
+    """Página de relatórios de grupos"""
+    if not current_user(request):
+        return RedirectResponse("/login")
+    
+    user = current_user(request)
+    
+    # Busca dados de grupos
+    con = sqlite3.connect(DB)
+    cur = con.cursor()
+    
+    groups_query = """
+        SELECT DATE(o.created_at) as data, g.visit_type, g.has_oficio, g.institution_name, 
+               g.responsible_name, g.state, g.city, g.total_students, g.total_teachers,
+               ROUND(SUM(oi.qty * oi.unit_price_cents)/100.0, 2) as receita
+        FROM groups g
+        JOIN orders o ON o.id = g.order_id
+        LEFT JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.deleted_at IS NULL
+    """
+    params = []
+    
+    if start_date:
+        groups_query += " AND DATE(o.created_at) >= ?"
+        params.append(start_date)
+    if end_date:
+        groups_query += " AND DATE(o.created_at) <= ?"
+        params.append(end_date)
+    if visit_type:
+        groups_query += " AND g.visit_type = ?"
+        params.append(visit_type)
+    
+    groups_query += " GROUP BY g.id ORDER BY o.created_at DESC"
+    
+    cur.execute(groups_query, params)
+    groups_data = cur.fetchall()
+    
+    con.close()
+    
+    return templates.TemplateResponse("reports_groups.html", {
+        "request": request,
+        "user": {"username": user},
+        "start_date": start_date,
+        "end_date": end_date,
+        "visit_type": visit_type,
+        "groups_data": groups_data
+    })
+
 @app.get("/api/reports/summary")
 def get_reports_summary(request: Request):
-    """Retorna resumo das vendas"""
+    """Retorna resumo das vendas usando nova arquitetura"""
     if not current_user(request):
         raise HTTPException(status_code=401, detail="Não autenticado")
     
     try:
         con = sqlite3.connect(DB)
         df = pd.read_sql_query("""
-            SELECT date(sold_at) AS dia,
-                   SUM(qty) AS ingressos,
-                   ROUND(SUM(qty*unit_price_cents)/100.0, 2) AS total_reais
-            FROM sales
+            SELECT DATE(o.created_at) AS dia,
+                   SUM(oi.qty) AS ingressos,
+                   ROUND(SUM(oi.qty*oi.unit_price_cents)/100.0, 2) AS total_reais
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            WHERE o.deleted_at IS NULL
             GROUP BY dia
             ORDER BY dia DESC
             LIMIT 30;
@@ -367,18 +723,20 @@ def get_reports_summary(request: Request):
 
 @app.get("/api/reports/export")
 def export_reports(request: Request):
-    """Exporta relatório para Excel"""
+    """Exporta relatório geral para Excel"""
     if not current_user(request):
         raise HTTPException(status_code=401, detail="Não autenticado")
     
     try:
         con = sqlite3.connect(DB)
         df = pd.read_sql_query("""
-            SELECT date(sold_at) AS dia,
-                   ticket_type AS tipo,
-                   SUM(qty) AS quantidade,
-                   ROUND(SUM(qty*unit_price_cents)/100.0, 2) AS total_reais
-            FROM sales
+            SELECT DATE(o.created_at) AS dia,
+                   oi.ticket_type AS tipo,
+                   SUM(oi.qty) AS quantidade,
+                   ROUND(SUM(oi.qty*oi.unit_price_cents)/100.0, 2) AS total_reais
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            WHERE o.deleted_at IS NULL
             GROUP BY dia, ticket_type
             ORDER BY dia DESC, ticket_type;
         """, con)
@@ -403,6 +761,530 @@ def export_reports(request: Request):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao exportar: {str(e)}")
+
+@app.get("/api/reports/reasons/export")
+def export_reasons_reports(request: Request, type: str, start: Optional[str] = None, end: Optional[str] = None, state: Optional[str] = None):
+    """Exporta relatório de motivos para Excel"""
+    if not current_user(request):
+        raise HTTPException(status_code=401, detail="Não autenticado")
+    
+    try:
+        con = sqlite3.connect(DB)
+        
+        if type == "meia":
+            query = """
+                SELECT oi.reason AS motivo, SUM(oi.qty) AS quantidade, 
+                       ROUND(SUM(oi.qty * oi.unit_price_cents)/100.0, 2) AS receita
+                FROM order_items oi
+                JOIN orders o ON o.id = oi.order_id
+                WHERE oi.ticket_type = 'meia' AND o.deleted_at IS NULL
+            """
+        else:  # gratuita
+            query = """
+                SELECT oi.reason AS motivo, SUM(oi.qty) AS quantidade, 0 AS receita
+                FROM order_items oi
+                JOIN orders o ON o.id = oi.order_id
+                WHERE oi.ticket_type = 'gratuita' AND o.deleted_at IS NULL
+            """
+        
+        params = []
+        if start:
+            query += " AND DATE(o.created_at) >= ?"
+            params.append(start)
+        if end:
+            query += " AND DATE(o.created_at) <= ?"
+            params.append(end)
+        if state:
+            query += " AND o.state = ?"
+            params.append(state)
+        
+        query += " GROUP BY oi.reason ORDER BY quantidade DESC"
+        
+        df = pd.read_sql_query(query, con, params=params)
+        con.close()
+        
+        if df.empty:
+            raise HTTPException(status_code=404, detail="Não há dados para exportar")
+        
+        # Salva arquivo temporário
+        filename = f"relatorio_motivos_{type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filepath = f"temp/{filename}"
+        
+        # Cria diretório temp se não existir
+        os.makedirs("temp", exist_ok=True)
+        
+        df.to_excel(filepath, index=False)
+        
+        return FileResponse(
+            path=filepath,
+            filename=filename,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao exportar: {str(e)}")
+
+@app.get("/api/reports/groups/export")
+def export_groups_reports(request: Request, start: Optional[str] = None, end: Optional[str] = None, visit_type: Optional[str] = None):
+    """Exporta relatório de grupos para Excel"""
+    if not current_user(request):
+        raise HTTPException(status_code=401, detail="Não autenticado")
+    
+    try:
+        con = sqlite3.connect(DB)
+        
+        query = """
+            SELECT DATE(o.created_at) as data, g.visit_type as tipo_visita, 
+                   CASE WHEN g.has_oficio = 1 THEN 'Sim' ELSE 'Não' END as oficio,
+                   g.institution_name as instituicao, g.responsible_name as responsavel,
+                   g.state as uf, g.city as cidade, g.total_students as estudantes,
+                   g.total_teachers as professores,
+                   ROUND(SUM(oi.qty * oi.unit_price_cents)/100.0, 2) as receita
+            FROM groups g
+            JOIN orders o ON o.id = g.order_id
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            WHERE o.deleted_at IS NULL
+        """
+        
+        params = []
+        if start:
+            query += " AND DATE(o.created_at) >= ?"
+            params.append(start)
+        if end:
+            query += " AND DATE(o.created_at) <= ?"
+            params.append(end)
+        if visit_type:
+            query += " AND g.visit_type = ?"
+            params.append(visit_type)
+        
+        query += " GROUP BY g.id ORDER BY o.created_at DESC"
+        
+        df = pd.read_sql_query(query, con, params=params)
+        con.close()
+        
+        if df.empty:
+            raise HTTPException(status_code=404, detail="Não há grupos para exportar")
+        
+        # Salva arquivo temporário
+        filename = f"relatorio_grupos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filepath = f"temp/{filename}"
+        
+        # Cria diretório temp se não existir
+        os.makedirs("temp", exist_ok=True)
+        
+        df.to_excel(filepath, index=False)
+        
+        return FileResponse(
+            path=filepath,
+            filename=filename,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao exportar: {str(e)}")
+
+# ===== ROTAS DE ADMIN =====
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_home(request: Request):
+    """Página inicial do admin"""
+    if not current_user(request):
+        return RedirectResponse("/login")
+    
+    user = current_user(request)
+    return templates.TemplateResponse("admin_home.html", {
+        "request": request,
+        "user": {"username": user}
+    })
+
+@app.get("/admin/orders", response_class=HTMLResponse)
+def admin_orders(request: Request, start_date: Optional[str] = None, end_date: Optional[str] = None, 
+                 state: Optional[str] = None, q: Optional[str] = None, page: int = 1):
+    """Lista de pedidos para administração"""
+    if not current_user(request):
+        return RedirectResponse("/login")
+    
+    user = current_user(request)
+    
+    # Paginação
+    limit = 20
+    offset = (page - 1) * limit
+    
+    # Query principal
+    query = """
+        SELECT o.id, o.created_at, o.operator_username, o.state, o.city, o.note,
+               SUM(CASE WHEN oi.ticket_type='inteira' THEN oi.qty ELSE 0 END) AS inteiras,
+               SUM(CASE WHEN oi.ticket_type='meia' THEN oi.qty ELSE 0 END) AS meias,
+               SUM(CASE WHEN oi.ticket_type='gratuita' THEN oi.qty ELSE 0 END) AS gratuitas,
+               ROUND(SUM(oi.qty * oi.unit_price_cents)/100.0, 2) AS receita
+        FROM orders o
+        LEFT JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.deleted_at IS NULL
+    """
+    
+    params = []
+    if start_date:
+        query += " AND DATE(o.created_at) >= ?"
+        params.append(start_date)
+    if end_date:
+        query += " AND DATE(o.created_at) <= ?"
+        params.append(end_date)
+    if state:
+        query += " AND o.state = ?"
+        params.append(state)
+    if q:
+        query += " AND (o.city LIKE ? OR o.operator_username LIKE ? OR o.note LIKE ?)"
+        search_term = f"%{q}%"
+        params.extend([search_term, search_term, search_term])
+    
+    query += " GROUP BY o.id ORDER BY o.created_at DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+    
+    con = sqlite3.connect(DB)
+    cur = con.cursor()
+    cur.execute(query, params)
+    orders = cur.fetchall()
+    
+    # Contar total para paginação
+    count_query = """
+        SELECT COUNT(DISTINCT o.id)
+        FROM orders o
+        WHERE o.deleted_at IS NULL
+    """
+    count_params = []
+    if start_date:
+        count_query += " AND DATE(o.created_at) >= ?"
+        count_params.append(start_date)
+    if end_date:
+        count_query += " AND DATE(o.created_at) <= ?"
+        count_params.append(end_date)
+    if state:
+        count_query += " AND o.state = ?"
+        count_params.append(state)
+    if q:
+        count_query += " AND (o.city LIKE ? OR o.operator_username LIKE ? OR o.note LIKE ?)"
+        search_term = f"%{q}%"
+        count_params.extend([search_term, search_term, search_term])
+    
+    cur.execute(count_query, count_params)
+    total_orders = cur.fetchone()[0]
+    total_pages = (total_orders + limit - 1) // limit
+    
+    con.close()
+    
+    return templates.TemplateResponse("admin_orders.html", {
+        "request": request,
+        "user": {"username": user},
+        "orders": orders,
+        "start_date": start_date,
+        "end_date": end_date,
+        "state": state,
+        "q": q,
+        "page": page,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages
+    })
+
+@app.get("/admin/groups", response_class=HTMLResponse)
+def admin_groups(request: Request, start_date: Optional[str] = None, end_date: Optional[str] = None, 
+                 state: Optional[str] = None, q: Optional[str] = None, page: int = 1):
+    """Lista de grupos para administração"""
+    if not current_user(request):
+        return RedirectResponse("/login")
+    
+    user = current_user(request)
+    
+    # Paginação
+    limit = 20
+    offset = (page - 1) * limit
+    
+    # Query principal
+    query = """
+        SELECT g.id, o.created_at, g.visit_type, g.has_oficio, g.institution_name, 
+               g.responsible_name, g.state, g.city, g.total_students, g.total_teachers,
+               ROUND(SUM(oi.qty * oi.unit_price_cents)/100.0, 2) AS receita
+        FROM groups g
+        JOIN orders o ON o.id = g.order_id
+        LEFT JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.deleted_at IS NULL
+    """
+    
+    params = []
+    if start_date:
+        query += " AND DATE(o.created_at) >= ?"
+        params.append(start_date)
+    if end_date:
+        query += " AND DATE(o.created_at) <= ?"
+        params.append(end_date)
+    if state:
+        query += " AND g.state = ?"
+        params.append(state)
+    if q:
+        query += " AND (g.institution_name LIKE ? OR g.responsible_name LIKE ? OR g.city LIKE ?)"
+        search_term = f"%{q}%"
+        params.extend([search_term, search_term, search_term])
+    
+    query += " GROUP BY g.id ORDER BY o.created_at DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+    
+    con = sqlite3.connect(DB)
+    cur = con.cursor()
+    cur.execute(query, params)
+    groups = cur.fetchall()
+    
+    # Contar total para paginação
+    count_query = """
+        SELECT COUNT(DISTINCT g.id)
+        FROM groups g
+        JOIN orders o ON o.id = g.order_id
+        WHERE o.deleted_at IS NULL
+    """
+    count_params = []
+    if start_date:
+        count_query += " AND DATE(o.created_at) >= ?"
+        count_params.append(start_date)
+    if end_date:
+        count_query += " AND DATE(o.created_at) <= ?"
+        count_params.append(end_date)
+    if state:
+        count_query += " AND g.state = ?"
+        count_params.append(state)
+    if q:
+        count_query += " AND (g.institution_name LIKE ? OR g.responsible_name LIKE ? OR g.city LIKE ?)"
+        search_term = f"%{q}%"
+        count_params.extend([search_term, search_term, search_term])
+    
+    cur.execute(count_query, count_params)
+    total_groups = cur.fetchone()[0]
+    total_pages = (total_groups + limit - 1) // limit
+    
+    con.close()
+    
+    return templates.TemplateResponse("admin_groups.html", {
+        "request": request,
+        "user": {"username": user},
+        "groups": groups,
+        "start_date": start_date,
+        "end_date": end_date,
+        "state": state,
+        "q": q,
+        "page": page,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages
+    })
+
+@app.get("/admin/orders/{order_id}/edit", response_class=HTMLResponse)
+def admin_order_edit(request: Request, order_id: int):
+    """Formulário de edição de pedido"""
+    if not current_user(request):
+        return RedirectResponse("/login")
+    
+    user = current_user(request)
+    
+    con = sqlite3.connect(DB)
+    cur = con.cursor()
+    
+    # Busca dados do pedido
+    cur.execute("""
+        SELECT id, created_at, operator_username, state, city, note
+        FROM orders 
+        WHERE id = ? AND deleted_at IS NULL
+    """, (order_id,))
+    
+    order = cur.fetchone()
+    if not order:
+        con.close()
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+    
+    # Busca itens do pedido
+    cur.execute("""
+        SELECT ticket_type, qty, reason
+        FROM order_items 
+        WHERE order_id = ?
+        ORDER BY ticket_type
+    """, (order_id,))
+    
+    items = cur.fetchall()
+    con.close()
+    
+    # Organiza os dados
+    order_data = {
+        "id": order[0],
+        "created_at": order[1],
+        "operator_username": order[2],
+        "state": order[3],
+        "city": order[4],
+        "note": order[5],
+        "qtd_inteira": 0,
+        "qtd_meia": 0,
+        "qtd_gratuita": 0,
+        "reason_meia": None,
+        "reason_gratuita": None
+    }
+    
+    for item in items:
+        if item[0] == "inteira":
+            order_data["qtd_inteira"] = item[1]
+        elif item[0] == "meia":
+            order_data["qtd_meia"] = item[1]
+            order_data["reason_meia"] = item[2]
+        elif item[0] == "gratuita":
+            order_data["qtd_gratuita"] = item[1]
+            order_data["reason_gratuita"] = item[2]
+    
+    return templates.TemplateResponse("admin_order_edit.html", {
+        "request": request,
+        "user": {"username": user},
+        "order": order_data
+    })
+
+@app.post("/admin/orders/{order_id}/edit")
+def admin_order_update(request: Request, order_id: int,
+                      qtd_inteira: int = Form(0),
+                      qtd_meia: int = Form(0),
+                      qtd_gratuita: int = Form(0),
+                      reason_meia: Optional[str] = Form(None),
+                      reason_gratuita: Optional[str] = Form(None),
+                      name: Optional[str] = Form(None),
+                      state: Optional[str] = Form(None),
+                      city: Optional[str] = Form(None),
+                      note: Optional[str] = Form(None)):
+    """Salva edição de pedido"""
+    if not current_user(request):
+        return RedirectResponse("/login", status_code=303)
+    
+    user = current_user(request)
+    
+    try:
+        con = sqlite3.connect(DB)
+        cur = con.cursor()
+        
+        # Verifica se o pedido existe
+        cur.execute("SELECT id FROM orders WHERE id = ? AND deleted_at IS NULL", (order_id,))
+        if not cur.fetchone():
+            con.close()
+            raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        
+        # Atualiza dados do pedido
+        cur.execute("""
+            UPDATE orders 
+            SET state = ?, city = ?, note = ?
+            WHERE id = ?
+        """, (state, city, note, order_id))
+        
+        # Remove itens antigos
+        cur.execute("DELETE FROM order_items WHERE order_id = ?", (order_id,))
+        
+        # Insere novos itens
+        items = [
+            ("inteira", qtd_inteira, 1000, None),
+            ("meia", qtd_meia, 500, reason_meia),
+            ("gratuita", qtd_gratuita, 0, reason_gratuita),
+        ]
+        
+        for tipo, qtd, preco, motivo in items:
+            if qtd and qtd > 0:
+                cur.execute("""
+                    INSERT INTO order_items(order_id, ticket_type, qty, unit_price_cents, reason)
+                    VALUES(?, ?, ?, ?, ?)
+                """, (order_id, tipo, qtd, preco, motivo))
+        
+        # Log da edição
+        now = datetime.now().isoformat()
+        cur.execute("""
+            INSERT INTO order_events(order_id, action, who, when_created, reason)
+            VALUES(?, 'edit', ?, ?, ?)
+        """, (order_id, user, now, "Edição via admin"))
+        
+        con.commit()
+        con.close()
+        
+        return RedirectResponse("/admin/orders", status_code=303)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar edição: {str(e)}")
+
+@app.post("/admin/orders/{order_id}/delete")
+def admin_order_delete(request: Request, order_id: int, reason: str = Form("")):
+    """Exclusão soft de pedido"""
+    if not current_user(request):
+        return RedirectResponse("/login", status_code=303)
+    
+    user = current_user(request)
+    
+    try:
+        con = sqlite3.connect(DB)
+        cur = con.cursor()
+        
+        # Verifica se o pedido existe
+        cur.execute("SELECT id, created_at FROM orders WHERE id = ? AND deleted_at IS NULL", (order_id,))
+        order = cur.fetchone()
+        if not order:
+            con.close()
+            raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        
+        # Soft delete
+        now = datetime.now().isoformat()
+        cur.execute("UPDATE orders SET deleted_at = ? WHERE id = ?", (now, order_id))
+        
+        # Log da exclusão
+        cur.execute("""
+            INSERT INTO order_events(order_id, action, who, when_created, reason)
+            VALUES(?, 'delete', ?, ?, ?)
+        """, (order_id, user, now, reason or "Exclusão via admin"))
+        
+        con.commit()
+        con.close()
+        
+        return RedirectResponse("/admin/orders", status_code=303)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir pedido: {str(e)}")
+
+@app.post("/admin/groups/{group_id}/delete")
+def admin_group_delete(request: Request, group_id: int, reason: str = Form("")):
+    """Exclusão soft de grupo"""
+    if not current_user(request):
+        return RedirectResponse("/login", status_code=303)
+    
+    user = current_user(request)
+    
+    try:
+        con = sqlite3.connect(DB)
+        cur = con.cursor()
+        
+        # Busca o order_id do grupo
+        cur.execute("SELECT order_id FROM groups WHERE id = ?", (group_id,))
+        group = cur.fetchone()
+        if not group:
+            con.close()
+            raise HTTPException(status_code=404, detail="Grupo não encontrado")
+        
+        order_id = group[0]
+        
+        # Verifica se o pedido existe
+        cur.execute("SELECT id FROM orders WHERE id = ? AND deleted_at IS NULL", (order_id,))
+        if not cur.fetchone():
+            con.close()
+            raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        
+        # Soft delete
+        now = datetime.now().isoformat()
+        cur.execute("UPDATE orders SET deleted_at = ? WHERE id = ?", (now, order_id))
+        
+        # Log da exclusão
+        cur.execute("""
+            INSERT INTO order_events(order_id, action, who, when_created, reason)
+            VALUES(?, 'delete', ?, ?, ?)
+        """, (order_id, user, now, reason or "Exclusão de grupo via admin"))
+        
+        con.commit()
+        con.close()
+        
+        return RedirectResponse("/admin/groups", status_code=303)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir grupo: {str(e)}")
 
 @app.get("/logout")
 async def logout(request: Request):
