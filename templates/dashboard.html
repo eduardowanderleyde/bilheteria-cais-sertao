@@ -27,6 +27,22 @@
   </div>
 </div>
 
+<!-- Receita por Forma de Pagamento -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+  <div class="bg-white rounded-xl p-6 shadow">
+    <div class="text-slate-500 text-sm">💳 Crédito (Hoje)</div>
+    <div class="text-3xl font-extrabold mt-2 text-green-600">R$ {{ credito_hoje or 0 }}</div>
+  </div>
+  <div class="bg-white rounded-xl p-6 shadow">
+    <div class="text-slate-500 text-sm">💳 Débito (Hoje)</div>
+    <div class="text-3xl font-extrabold mt-2 text-blue-600">R$ {{ debito_hoje or 0 }}</div>
+  </div>
+  <div class="bg-white rounded-xl p-6 shadow">
+    <div class="text-slate-500 text-sm">📱 PIX (Hoje)</div>
+    <div class="text-3xl font-extrabold mt-2 text-purple-600">R$ {{ pix_hoje or 0 }}</div>
+  </div>
+</div>
+
 <!-- Ações Rápidas -->
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
   <a href="/sell" class="bg-white rounded-xl p-8 shadow hover:shadow-lg transition-shadow text-center">

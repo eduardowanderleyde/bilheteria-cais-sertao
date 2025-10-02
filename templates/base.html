@@ -22,7 +22,9 @@
              <a href="/sell"      class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/sell' }}">🛒 Vender</a>
              <a href="/groups"   class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/groups' }}">👥 Grupos</a>
              <a href="/reports"   class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/reports' }}">📊 Relatórios</a>
+             {% if user and user.role in ['admin', 'gestora'] %}
              <a href="/admin"     class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path.startswith('/admin') }}">⚙️ Admin</a>
+             {% endif %}
              <a href="/logout"    class="block px-3 py-3 rounded-lg hover:bg-red-50 text-red-700">↩️ Sair</a>
       </nav>
     </aside>

@@ -87,6 +87,25 @@
       </div>
     </div>
     <input name="note" placeholder="Observação" class="border rounded-lg px-3 h-12 w-full">
+    
+    <!-- Forma de pagamento -->
+    <div class="mt-4">
+      <div class="text-sm font-medium text-gray-700 mb-2">Forma de pagamento</div>
+      <div class="flex gap-4">
+        <label class="inline-flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="payment_method" value="credito" required class="w-4 h-4 text-blue-600">
+          <span class="text-sm">💳 Crédito</span>
+        </label>
+        <label class="inline-flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="payment_method" value="debito" class="w-4 h-4 text-blue-600">
+          <span class="text-sm">💳 Débito</span>
+        </label>
+        <label class="inline-flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="payment_method" value="pix" class="w-4 h-4 text-blue-600">
+          <span class="text-sm">📱 PIX</span>
+        </label>
+      </div>
+    </div>
   </div>
 
   <div class="bg-white rounded-xl p-6 shadow">
