@@ -25,6 +25,7 @@
              {% if user and user.role in ['admin', 'gestora'] %}
              <a href="/admin"     class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path.startswith('/admin') }}">⚙️ Admin</a>
              {% endif %}
+             <a href="/whoami"    class="block px-3 py-3 rounded-lg hover:bg-slate-100 {{ 'bg-slate-200 font-semibold' if request.url.path == '/whoami' }}">👤 Quem sou</a>
              <a href="/logout"    class="block px-3 py-3 rounded-lg hover:bg-red-50 text-red-700">↩️ Sair</a>
       </nav>
     </aside>

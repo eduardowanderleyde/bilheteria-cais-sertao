@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% set no_sidebar = True %}
+{% block title %}Informações do Usuário{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-md bg-white rounded-xl shadow p-6">
+  <div class="text-center mb-6">
+    <div class="text-6xl mb-4">👤</div>
+    <h1 class="text-2xl font-bold text-gray-900">Informações do Usuário</h1>
+    <p class="text-gray-600">Dados da sessão atual</p>
+  </div>
+  
+  <div class="space-y-4">
+    <div class="bg-gray-50 p-4 rounded-lg">
+      <div class="text-sm text-gray-600 mb-1">Usuário</div>
+      <div class="text-lg font-semibold">{{ user.username }}</div>
+    </div>
+    
+    <div class="bg-gray-50 p-4 rounded-lg">
+      <div class="text-sm text-gray-600 mb-1">Papel</div>
+      <div class="text-lg font-semibold">
+        {% if user.role == 'admin' %}
+          <span class="text-red-600">🔑 Administrador</span>
+        {% elif user.role == 'gestora' %}
+          <span class="text-blue-600">👩‍💼 Gestora</span>
+        {% elif user.role == 'bilheteira' %}
+          <span class="text-green-600">🎫 Bilheteira</span>
+        {% else %}
+          <span class="text-gray-600">{{ user.role }}</span>
+        {% endif %}
+      </div>
+    </div>
+    
+    <div class="bg-gray-50 p-4 rounded-lg">
+      <div class="text-sm text-gray-600 mb-1">Permissões</div>
+      <div class="text-sm">
+        {% if user.role == 'admin' %}
+          <span class="text-green-600">✅ Acesso total (incluindo exclusões)</span>
+        {% elif user.role == 'gestora' %}
+          <span class="text-green-600">✅ Acesso total (incluindo exclusões)</span>
+        {% elif user.role == 'bilheteira' %}
+          <span class="text-yellow-600">⚠️ Acesso limitado (sem exclusões)</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  
+  <div class="mt-6 space-y-3">
+    <a href="/dashboard" 
+       class="block w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors text-center leading-12">
+      🏠 Voltar ao Dashboard
+    </a>
+    
+    <a href="/logout" 
+       class="block w-full h-12 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition-colors text-center leading-12">
+      ↩️ Fazer Logout
+    </a>
+  </div>
+</div>
+{% endblock %}
