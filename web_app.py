@@ -237,8 +237,8 @@ def init_db():
     cur.execute("SELECT 1 FROM users WHERE username='funcionario1'")
     if not cur.fetchone():
         pwd = b"123456"
-        cur.execute("INSERT INTO users(username,password_hash,role) VALUES (?,?,?)",
-                    ("funcionario1", bcrypt.hashpw(pwd, bcrypt.gensalt()), "operator"))
+        cur.execute("INSERT INTO users(username,password_hash,role,is_active) VALUES (?,?,?,?)",
+                    ("funcionario1", bcrypt.hashpw(pwd, bcrypt.gensalt()), "operator", 1))
     
     con.commit()
     con.close()

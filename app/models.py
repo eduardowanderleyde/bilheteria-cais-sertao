@@ -104,3 +104,21 @@ class Sale(Base):
     city = Column(String(100))
     note = Column(Text)
     payment_method = Column(String(20))
+
+class GroupVisit(Base):
+    """Group visits model for detailed group tracking"""
+    __tablename__ = "group_visits"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(DateTime, nullable=False)  # data da visita
+    institution = Column(String(160))  # escola/instituição
+    size = Column(Integer, nullable=False)  # nº pessoas
+    state = Column(String(2))  # UF
+    city = Column(String(120))  # cidade
+    scheduled = Column(Boolean, default=True)  # agendada?
+    contact_name = Column(String(120))
+    contact_phone = Column(String(40))
+    price_total = Column(Numeric(10,2), default=0)  # opcional
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationships - removed for now as it's not needed for basic functionality
