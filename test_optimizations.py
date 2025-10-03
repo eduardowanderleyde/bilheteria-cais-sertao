@@ -4,6 +4,7 @@
 import requests
 import time
 import json
+import os
 
 def test_optimizations():
     """Testa as otimizações de performance"""
@@ -16,9 +17,17 @@ def test_optimizations():
     r = session.get(f"{base_url}/auth/login")
     csrf_match = r.text.split('name="csrf_token" value="')[1].split('"')[0]
     
+    # Get credentials from environment
+    username = os.getenv("TEST_USERNAME", "admingeral")
+    password = os.getenv("TEST_PASSWORD")
+    
+    if not password:
+        print("   ERRO: TEST_PASSWORD deve ser definida nas variáveis de ambiente")
+        return
+    
     login_data = {
-        "username": "admingeral",
-        "password": "18091992123",
+        "username": username,
+        "password": password,
         "csrf_token": csrf_match
     }
     r = session.post(f"{base_url}/auth/login", data=login_data, allow_redirects=False)
