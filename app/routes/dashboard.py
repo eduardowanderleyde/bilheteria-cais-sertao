@@ -1,6 +1,6 @@
 """Dashboard routes"""
 from fastapi import APIRouter, Request, Depends, HTTPException, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
@@ -74,3 +74,28 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         "pix_today": f"{payment_data.get('pix', 0):.2f}",
         "recent_orders": recent_orders
     })
+
+@router.get("/api/reports/summary")
+async def get_reports_summary(request: Request, db: Session = Depends(get_db)):
+    """API para resumo das vendas (usado pelo dashboard)"""
+    user = require_auth(request)
+    
+    # Query para resumo dos últimos 30 dias
+    results = db.query(
+        func.date(Order.created_at).label('dia'),
+        func.sum(OrderItem.qty).label('ingressos'),
+        func.sum(OrderItem.qty * OrderItem.unit_price_cents).label('total_reais')
+    ).join(OrderItem).filter(
+        Order.deleted_at.is_(None)
+    ).group_by(func.date(Order.created_at)).order_by(desc('dia')).limit(30).all()
+    
+    # Converter para formato esperado pelo frontend
+    data = []
+    for result in results:
+        data.append({
+            "dia": result.dia.strftime("%Y-%m-%d"),
+            "ingressos": result.ingressos or 0,
+            "total_reais": round((result.total_reais or 0) / 100, 2)
+        })
+    
+    return JSONResponse(content={"data": data})
