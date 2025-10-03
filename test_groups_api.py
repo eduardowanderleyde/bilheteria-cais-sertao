@@ -3,6 +3,7 @@
 
 import requests
 import json
+import os
 
 def test_groups_api():
     """Testa os endpoints de grupos"""
@@ -16,10 +17,18 @@ def test_groups_api():
     r = session.get(f"{base_url}/auth/login")
     csrf_match = r.text.split('name="csrf_token" value="')[1].split('"')[0]
     
+    # Get credentials from environment
+    username = os.getenv("TEST_USERNAME", "***REMOVED***")
+    password = os.getenv("TEST_PASSWORD")
+    
+    if not password:
+        print("   ERRO: TEST_PASSWORD deve ser definida nas variáveis de ambiente")
+        return
+    
     # POST login
     login_data = {
-        "username": "***REMOVED***",
-        "password": "18091992123",
+        "username": username,
+        "password": password,
         "csrf_token": csrf_match
     }
     r = session.post(f"{base_url}/auth/login", data=login_data, allow_redirects=False)

@@ -12,8 +12,13 @@ def seed_admin():
     Base.metadata.create_all(bind=engine)
     
     # Get admin credentials from environment
-    admin_username = os.getenv("ADMIN_USERNAME", "***REMOVED***")
-    admin_password = os.getenv("ADMIN_PASSWORD", "***REMOVED***")
+    admin_username = os.getenv("ADMIN_USERNAME")
+    admin_password = os.getenv("ADMIN_PASSWORD")
+    
+    if not admin_username or not admin_password:
+        print("ERRO: ADMIN_USERNAME e ADMIN_PASSWORD devem ser definidos nas variáveis de ambiente")
+        print("Exemplo: export ADMIN_USERNAME=admin && export ADMIN_PASSWORD=senha_segura")
+        sys.exit(1)
     
     db = SessionLocal()
     try:
@@ -35,11 +40,14 @@ def seed_admin():
             )
             db.add(admin_user)
         
-        # Create default users if they don't exist
+        # Create default users if they don't exist (using environment variables)
+        gestora_password = os.getenv("GESTORA_PASSWORD", "gestora123")
+        bilheteira_password = os.getenv("BILHETEIRA_PASSWORD", "bilheteira123")
+        
         default_users = [
-            ("gestora1", "gestora123", "gestora"),
-            ("bilheteira1", "bilheteira123", "bilheteira"),
-            ("bilheteira2", "bilheteira123", "bilheteira"),
+            ("gestora1", gestora_password, "gestora"),
+            ("bilheteira1", bilheteira_password, "bilheteira"),
+            ("bilheteira2", bilheteira_password, "bilheteira"),
         ]
         
         for username, password, role in default_users:
@@ -57,12 +65,12 @@ def seed_admin():
         db.commit()
         print("Users created/updated successfully!")
         
-        # Print login information
-        print("\nLogin Information:")
-        print(f"Admin: {admin_username} / {admin_password}")
-        print("Gestora: gestora1 / gestora123")
-        print("Bilheteira: bilheteira1 / bilheteira123")
-        print("Bilheteira: bilheteira2 / bilheteira123")
+        # Print login information (without passwords)
+        print("\nUsers created successfully!")
+        print(f"Admin: {admin_username}")
+        print("Gestora: gestora1")
+        print("Bilheteira: bilheteira1, bilheteira2")
+        print("\nPasswords are stored securely in environment variables.")
         
     except Exception as e:
         print(f"Error creating users: {e}")
