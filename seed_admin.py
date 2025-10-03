@@ -55,17 +55,17 @@ def seed_admin():
                 db.add(user)
         
         db.commit()
-        print("✅ Users created/updated successfully!")
+        print("Users created/updated successfully!")
         
         # Print login information
-        print("\n🔐 Login Information:")
+        print("\nLogin Information:")
         print(f"Admin: {admin_username} / {admin_password}")
         print("Gestora: gestora1 / gestora123")
         print("Bilheteira: bilheteira1 / bilheteira123")
         print("Bilheteira: bilheteira2 / bilheteira123")
         
     except Exception as e:
-        print(f"❌ Error creating users: {e}")
+        print(f"Error creating users: {e}")
         db.rollback()
         sys.exit(1)
     finally:
