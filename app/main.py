@@ -40,10 +40,10 @@ app.add_middleware(
 # Session middleware
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("SECRET_KEY", "your-secret-key-change-in-production"),
-    max_age=3600,  # 1 hour
+    secret_key=os.getenv("SECRET_KEY", "change-me"),
+    https_only=os.getenv("SECURE_COOKIES", "false").lower() == "true",
     same_site="lax",
-    https_only=False  # Set to True in production with HTTPS
+    session_cookie="session",
 )
 
 # Mount static files
