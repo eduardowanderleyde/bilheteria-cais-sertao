@@ -3,6 +3,7 @@
 
 import requests
 import re
+import os
 
 def test_payment_methods():
     """Testa se todas as formas de pagamento estão disponíveis"""
@@ -17,10 +18,18 @@ def test_payment_methods():
     csrf_match = re.search(r'name="csrf_token" value="([^"]+)"', r.text)
     csrf_token = csrf_match.group(1)
     
+    # Get credentials from environment
+    username = os.getenv("TEST_USERNAME", "***REMOVED***")
+    password = os.getenv("TEST_PASSWORD")
+    
+    if not password:
+        print("   ERRO: TEST_PASSWORD deve ser definida nas variáveis de ambiente")
+        return
+    
     # POST login
     login_data = {
-        "username": "***REMOVED***",
-        "password": "18091992123",
+        "username": username,
+        "password": password,
         "csrf_token": csrf_token
     }
     r = session.post(f"{base_url}/auth/login", data=login_data, allow_redirects=False)
