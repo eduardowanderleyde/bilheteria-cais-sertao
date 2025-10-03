@@ -12,8 +12,8 @@ def seed_admin():
     Base.metadata.create_all(bind=engine)
     
     # Get admin credentials from environment
-    admin_username = os.getenv("ADMIN_USERNAME", "admin")
-    admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
+    admin_username = os.getenv("ADMIN_USERNAME", "admingeral")
+    admin_password = os.getenv("ADMIN_PASSWORD", "TroqueAqui!")
     
     db = SessionLocal()
     try:
