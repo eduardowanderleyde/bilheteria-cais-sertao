@@ -335,6 +335,19 @@ def unauthorized(request: Request):
         "no_sidebar": True
     })
 
+@app.get("/whoami", response_class=HTMLResponse)
+def whoami(request: Request):
+    """Mostra informações do usuário logado"""
+    if not current_user(request):
+        return RedirectResponse("/login", status_code=303)
+    
+    user_info = get_user_info(request)
+    return templates.TemplateResponse("whoami.html", {
+        "request": request,
+        "no_sidebar": True,
+        "user": user_info
+    })
+
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
     """Dashboard principal usando nova arquitetura"""
