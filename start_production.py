@@ -91,7 +91,7 @@ def start_server():
 
 def main():
     """Função principal"""
-    print("🎫 Sistema de Bilheteria - Inicialização")
+    print("Sistema de Bilheteria - Inicializacao")
     print("=" * 50)
     
     # Verificações

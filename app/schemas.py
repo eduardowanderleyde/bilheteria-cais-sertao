@@ -18,6 +18,7 @@ class PaymentMethod(str, Enum):
     CREDITO = "credito"
     DEBITO = "debito"
     PIX = "pix"
+    DINHEIRO = "dinheiro"
 
 class Channel(str, Enum):
     BALCAO = "balcao"
