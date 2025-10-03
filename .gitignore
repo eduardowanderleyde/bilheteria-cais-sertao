@@ -82,3 +82,16 @@ secrets.json
 credentials.json
 *.pem
 *.key
+config.json
+*.env.local
+*.env.production
+.env.*
+
+# Backup files
+*.bak
+*.backup
+*_backup.*
+
+# Test files with credentials
+test_*_with_creds.py
+*_with_passwords.py

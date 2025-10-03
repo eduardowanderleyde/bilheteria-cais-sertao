@@ -3,6 +3,7 @@
 
 import requests
 import re
+import os
 
 def test_login():
     """Testa o login"""
@@ -35,9 +36,18 @@ def test_login():
     # 2) POST /auth/login (usa o MESMO cookie e o MESMO token)
     print("\n2. Fazendo login...")
     try:
+        # Get credentials from environment variables
+        username = os.getenv("TEST_USERNAME", "admingeral")
+        password = os.getenv("TEST_PASSWORD")
+        
+        if not password:
+            print("   ERRO: TEST_PASSWORD deve ser definida nas variáveis de ambiente")
+            print("   Exemplo: export TEST_PASSWORD=sua_senha")
+            return
+        
         login_data = {
-            "username": "admingeral",
-            "password": "18091992123",
+            "username": username,
+            "password": password,
             "csrf_token": csrf_token
         }
         

@@ -21,8 +21,9 @@ DATABASE_URL=sqlite:///./bilheteria.db
 SECRET_KEY={generate_secret_key()}
 
 # Admin User (created by seed_admin.py)
-ADMIN_USERNAME=admingeral
-ADMIN_PASSWORD=TroqueAqui!
+# IMPORTANTE: Altere estas credenciais antes de usar em produção!
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=CHANGE_ME_SECURE_PASSWORD_123!
 
 # Application Settings
 DEBUG=True
@@ -40,8 +41,11 @@ def setup_postgres_env():
     """Configura variáveis para PostgreSQL"""
     print("\nPara usar PostgreSQL, configure:")
     print("export DATABASE_URL=postgresql://user:password@localhost:5432/bilheteria")
-    print("export ADMIN_USERNAME=admingeral")
-    print("export ADMIN_PASSWORD='TroqueAqui!'")
+    print("export ADMIN_USERNAME=admin")
+    print("export ADMIN_PASSWORD='SUA_SENHA_SEGURA_AQUI'")
+    print("export GESTORA_PASSWORD='SENHA_GESTORA_SEGURA'")
+    print("export BILHETEIRA_PASSWORD='SENHA_BILHETEIRA_SEGURA'")
+    print("export TEST_PASSWORD='SENHA_PARA_TESTES'")
 
 def main():
     """Função principal"""
