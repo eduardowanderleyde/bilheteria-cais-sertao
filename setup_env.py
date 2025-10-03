@@ -33,31 +33,31 @@ PORT=8000
     with open(".env", "w") as f:
         f.write(env_content)
     
-    print("✅ Arquivo .env criado")
-    print(f"🔑 SECRET_KEY gerada: {generate_secret_key()[:8]}...")
+    print("Arquivo .env criado")
+    print(f"SECRET_KEY gerada: {generate_secret_key()[:8]}...")
 
 def setup_postgres_env():
     """Configura variáveis para PostgreSQL"""
-    print("\n🐘 Para usar PostgreSQL, configure:")
+    print("\nPara usar PostgreSQL, configure:")
     print("export DATABASE_URL=postgresql://user:password@localhost:5432/bilheteria")
     print("export ADMIN_USERNAME=***REMOVED***")
     print("export ADMIN_PASSWORD='***REMOVED***'")
 
 def main():
     """Função principal"""
-    print("🔧 Configurando variáveis de ambiente...")
+    print("Configurando variaveis de ambiente...")
     
     # Cria .env se não existir
     if not Path(".env").exists():
         create_env_file()
     else:
-        print("ℹ️ Arquivo .env já existe")
+        print("Arquivo .env ja existe")
     
     # Mostra instruções para PostgreSQL
     setup_postgres_env()
     
-    print("\n📋 Próximos passos:")
-    print("1. Edite .env com suas configurações")
+    print("\nProximos passos:")
+    print("1. Edite .env com suas configuracoes")
     print("2. Para PostgreSQL: configure DATABASE_URL")
     print("3. Execute: python seed_admin.py")
     print("4. Execute: uvicorn app.main:app --reload")

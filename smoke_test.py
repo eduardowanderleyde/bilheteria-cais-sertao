@@ -15,12 +15,12 @@ def test_server_running():
     try:
         response = requests.get(f"{BASE_URL}/health", timeout=5)
         if response.status_code == 200:
-            print("✅ Servidor está rodando")
+            print("Servidor esta rodando")
             return True
     except requests.exceptions.RequestException:
         pass
     
-    print("❌ Servidor não está rodando")
+    print("Servidor nao esta rodando")
     print("Execute: uvicorn app.main:app --reload")
     return False
 
@@ -118,7 +118,7 @@ def test_admin_endpoints():
 
 def main():
     """Função principal"""
-    print("🧪 Executando smoke test...")
+    print("Executando smoke test...")
     print("=" * 50)
     
     tests = [
