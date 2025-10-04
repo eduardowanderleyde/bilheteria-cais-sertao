@@ -12,9 +12,9 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: ADMIN_USERNAME
-        value: admin
+        value: admingeral
       - key: ADMIN_PASSWORD
-        value: admin123
+        value: TroqueAqui!
     healthCheckPath: /health
     autoDeploy: true
 
