@@ -5,6 +5,9 @@ from sqlalchemy.orm import Session
 from app.db import SessionLocal, engine
 from app.models import User, Base
 from app.auth import hash_password
+from dotenv import load_dotenv
+
+load_dotenv()  # carrega o .env da raiz
 
 def seed_admin():
     """Create admin user from environment variables"""
