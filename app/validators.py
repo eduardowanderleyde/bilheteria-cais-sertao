@@ -4,7 +4,8 @@ Data validation utilities
 import re
 from typing import Any, Dict, List, Optional
 from datetime import datetime, date
-from pydantic import BaseModel, validator, Field
+from pydantic import BaseModel, field_validator, Field
+from enum import Enum
 from app.config import get_settings
 
 
@@ -50,21 +51,24 @@ class SaleCreate(BaseModel):
     customer_city: Optional[str] = Field(None, max_length=120)
     notes: Optional[str] = Field(None, max_length=500)
     
-    @validator('customer_state')
+    @field_validator('customer_state')
+    @classmethod
     def validate_state(cls, v):
         if v and len(v) != 2:
             raise ValueError('State must be 2 characters')
         return v.upper() if v else v
     
-    @validator('customer_name')
+    @field_validator('customer_name')
+    @classmethod
     def validate_name(cls, v):
         if v and not re.match(r'^[a-zA-ZÀ-ÿ\s]+$', v):
             raise ValueError('Name can only contain letters and spaces')
         return v
     
-    @validator('discount_reason')
-    def validate_discount_reason(cls, v, values):
-        ticket_type = values.get('ticket_type')
+    @field_validator('discount_reason')
+    @classmethod
+    def validate_discount_reason(cls, v, info):
+        ticket_type = info.data.get('ticket_type') if info.data else None
         if ticket_type in ['meia', 'gratuita'] and not v:
             raise ValueError(f'Discount reason required for {ticket_type} tickets')
         return v
@@ -82,19 +86,22 @@ class GroupCreate(BaseModel):
     price_total: Optional[float] = Field(None, ge=0)
     visit_date: Optional[date] = None
     
-    @validator('state')
+    @field_validator('state')
+    @classmethod
     def validate_state(cls, v):
         if len(v) != 2:
             raise ValueError('State must be 2 characters')
         return v.upper()
     
-    @validator('contact_phone')
+    @field_validator('contact_phone')
+    @classmethod
     def validate_phone(cls, v):
         if v and not re.match(r'^\(\d{2}\)\s\d{4,5}-\d{4}$', v):
             raise ValueError('Phone must be in format (XX) XXXX-XXXX or (XX) XXXXX-XXXX')
         return v
     
-    @validator('visit_date')
+    @field_validator('visit_date')
+    @classmethod
     def validate_visit_date(cls, v):
         if v and v < date.today():
             raise ValueError('Visit date cannot be in the past')
@@ -105,16 +112,18 @@ class UserCreate(BaseModel):
     """User creation validation"""
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=8, max_length=128)
-    role: str = Field(..., regex='^(admin|gestora|bilheteira)$')
+    role: str = Field(..., pattern='^(admin|gestora|bilheteira)$')
     is_active: bool = True
     
-    @validator('username')
+    @field_validator('username')
+    @classmethod
     def validate_username(cls, v):
         if not re.match(r'^[a-zA-Z0-9_]+$', v):
             raise ValueError('Username can only contain letters, numbers and underscores')
         return v.lower()
     
-    @validator('password')
+    @field_validator('password')
+    @classmethod
     def validate_password(cls, v):
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters')
@@ -137,14 +146,16 @@ class ReportFilter(BaseModel):
     limit: int = Field(100, ge=1, le=1000)
     offset: int = Field(0, ge=0)
     
-    @validator('end_date')
-    def validate_date_range(cls, v, values):
-        start_date = values.get('start_date')
+    @field_validator('end_date')
+    @classmethod
+    def validate_date_range(cls, v, info):
+        start_date = info.data.get('start_date') if info.data else None
         if start_date and v and v < start_date:
             raise ValueError('End date must be after start date')
         return v
     
-    @validator('state')
+    @field_validator('state')
+    @classmethod
     def validate_state(cls, v):
         if v and len(v) != 2:
             raise ValueError('State must be 2 characters')

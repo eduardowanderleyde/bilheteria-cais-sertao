@@ -2,7 +2,7 @@ services:
   - type: web
     name: bilheteria-cais
     env: python
-    buildCommand: pip install -r requirements.txt && python seed_admin.py
+    buildCommand: pip install -r requirements.txt && alembic upgrade head && python seed_admin.py
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
@@ -15,6 +15,16 @@ services:
         value: ***REMOVED***
       - key: ADMIN_PASSWORD
         value: ***REMOVED***
+      - key: GESTORA_PASSWORD
+        value: ***REMOVED***
+      - key: BILHETEIRA_PASSWORD
+        value: Januario72
+      - key: TEST_PASSWORD
+        value: Januario72
+      - key: DEBUG
+        value: "False"
+      - key: SECURE_COOKIES
+        value: "True"
     healthCheckPath: /health
     autoDeploy: true
 
