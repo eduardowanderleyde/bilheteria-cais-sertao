@@ -12,15 +12,15 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: ADMIN_USERNAME
-        value: ***REMOVED***
+        value: ${ADMIN_USERNAME:-admin}
       - key: ADMIN_PASSWORD
-        value: ***REMOVED***
+        value: ${ADMIN_PASSWORD:-CHANGE_ME_SECURE_PASSWORD}
       - key: GESTORA_PASSWORD
-        value: ***REMOVED***
+        value: ${GESTORA_PASSWORD:-CHANGE_ME_GESTORA_PASSWORD}
       - key: BILHETEIRA_PASSWORD
-        value: Januario72
+        value: ${BILHETEIRA_PASSWORD:-CHANGE_ME_BILHETEIRA_PASSWORD}
       - key: TEST_PASSWORD
-        value: Januario72
+        value: ${TEST_PASSWORD:-CHANGE_ME_TEST_PASSWORD}
       - key: DEBUG
         value: "False"
       - key: SECURE_COOKIES
