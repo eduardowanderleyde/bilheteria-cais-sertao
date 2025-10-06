@@ -1,0 +1,24 @@
+# Database Configuration
+DATABASE_URL=sqlite:///./bilheteria.db
+# Para PostgreSQL: DATABASE_URL=postgresql://user:password@localhost:5432/bilheteria
+
+# Security (OBRIGATÓRIO em produção)
+SECRET_KEY=your-secret-key-here-generate-with-secrets-token-hex-32
+
+# Admin User (created by seed_admin.py)
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=CHANGE_ME_SECURE_PASSWORD_123!
+
+# Other Users
+GESTORA_PASSWORD=CHANGE_ME_GESTORA_PASSWORD_123!
+BILHETEIRA_PASSWORD=CHANGE_ME_BILHETEIRA_PASSWORD_123!
+
+# Test Credentials
+TEST_USERNAME=admin
+TEST_PASSWORD=CHANGE_ME_TEST_PASSWORD_123!
+
+# Application Settings
+DEBUG=True
+HOST=127.0.0.1
+PORT=8000
+SECURE_COOKIES=false
