@@ -120,47 +120,61 @@
 <div class="bg-white rounded-xl shadow">
   <div class="p-6">
     <h3 class="text-xl font-bold mb-4">Resumo das Vendas (Últimos 7 dias)</h3>
-    <div id="detailed-summary" 
-         hx-get="/api/reports/summary" 
-         hx-trigger="load"
-         hx-target="this"
-         hx-swap="innerHTML">
+    <div id="detailed-summary">
       <div class="flex justify-center py-8">
-        <div class="text-slate-400">Carregando...</div>
+        <div class="text-slate-400">Carregando dados...</div>
       </div>
+    </div>
+    <div class="mt-4 space-x-2">
+      <button onclick="loadDashboardData()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+        🔄 Atualizar Dados
+      </button>
+      <button onclick="testAPI()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+        🧪 Testar API
+      </button>
     </div>
   </div>
 </div>
 
 <script>
-  // Atualiza métricas quando os dados são carregados
-  document.body.addEventListener('htmx:afterRequest', function(evt) {
-    if (evt.detail.xhr.responseURL.includes('/api/reports/summary')) {
-      try {
-        const response = JSON.parse(evt.detail.xhr.responseText);
-        if (response.success && response.data) {
-          updateDashboardMetrics(response.data);
-        }
-      } catch (e) {
-        // Erro já tratado pelo HTMX
-      }
-    }
-  });
-  
-  function updateDashboardMetrics(data) {
-    // Calcula totais do dia atual
-    const today = new Date().toISOString().split('T')[0];
-    const todayData = data.find(day => day.dia === today);
-    
-    if (todayData) {
-      document.getElementById('ingressos-hoje').textContent = todayData.ingressos;
-      document.getElementById('receita-hoje').textContent = `R$ ${todayData.total_reais.toFixed(2)}`;
+  // Função para testar a API
+  async function testAPI() {
+    try {
+      const response = await fetch('/api/test');
+      const data = await response.json();
+      alert('API Test: ' + JSON.stringify(data));
+    } catch (error) {
+      alert('Erro na API: ' + error.message);
     }
   }
   
+  // Função para carregar dados do dashboard
+  async function loadDashboardData() {
+    const summaryDiv = document.getElementById('detailed-summary');
+    summaryDiv.innerHTML = '<div class="flex justify-center py-8"><div class="text-slate-400">Carregando...</div></div>';
+    
+    try {
+      const response = await fetch('/api/dashboard/summary');
+      if (response.ok) {
+        const html = await response.text();
+        summaryDiv.innerHTML = html;
+        console.log('Dashboard data loaded successfully');
+      } else {
+        summaryDiv.innerHTML = '<div class="text-red-500 text-center py-8">Erro ao carregar dados: ' + response.status + '</div>';
+        console.error('Error loading dashboard:', response.status);
+      }
+    } catch (error) {
+      summaryDiv.innerHTML = '<div class="text-red-500 text-center py-8">Erro de conexão</div>';
+      console.error('Connection error:', error);
+    }
+  }
+  
+  // Carrega dados quando a página carrega
+  document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+  });
+  
   // Atualiza dashboard a cada 60 segundos
-  setInterval(() => {
-    htmx.trigger('#detailed-summary', 'htmx:trigger');
-  }, 60000);
+  setInterval(loadDashboardData, 60000);
 </script>
 {% endblock %}
