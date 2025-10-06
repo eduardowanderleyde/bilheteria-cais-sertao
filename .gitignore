@@ -95,3 +95,36 @@ config.json
 # Test files with credentials
 test_*_with_creds.py
 *_with_passwords.py
+
+# Production files
+*.pid
+*.sock
+*.pid.lock
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# CI/CD
+.github/workflows/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# IDE specific
+*.sublime-project
+*.sublime-workspace
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Application specific
+uploads/
+media/
+staticfiles/
