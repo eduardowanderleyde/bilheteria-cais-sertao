@@ -41,8 +41,8 @@ def seed_admin():
             db.add(admin_user)
         
         # Create default users if they don't exist (using environment variables)
-        gestora_password = os.getenv("GESTORA_PASSWORD", "gestora123")
-        bilheteira_password = os.getenv("BILHETEIRA_PASSWORD", "bilheteira123")
+        gestora_password = os.getenv("GESTORA_PASSWORD", "CHANGE_ME_GESTORA")
+        bilheteira_password = os.getenv("BILHETEIRA_PASSWORD", "CHANGE_ME_BILHETEIRA")
         
         default_users = [
             ("gestora1", gestora_password, "gestora"),

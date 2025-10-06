@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: bilheteria
       POSTGRES_USER: bilheteria
-      POSTGRES_PASSWORD: bilheteria123
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME_DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -35,7 +35,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://bilheteria:bilheteria123@db:5432/bilheteria
+      - DATABASE_URL=postgresql://bilheteria:${POSTGRES_PASSWORD:-CHANGE_ME_DB_PASSWORD}@db:5432/bilheteria
       - SECRET_KEY=your-secret-key-here
       - DEBUG=True
       - HOST=0.0.0.0
