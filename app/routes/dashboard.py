@@ -3,7 +3,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, desc
 from datetime import datetime, date
 from ..db import get_db
 from ..models import Order, OrderItem, User
@@ -11,6 +11,11 @@ from ..auth import require_auth, get_user_info
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+
+@router.get("/api/test")
+async def test_api():
+    """Teste simples da API"""
+    return {"status": "ok", "message": "API funcionando"}
 
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, db: Session = Depends(get_db)):
@@ -78,7 +83,10 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
 @router.get("/api/reports/summary")
 async def get_reports_summary(request: Request, db: Session = Depends(get_db)):
     """API para resumo das vendas (usado pelo dashboard)"""
-    user = require_auth(request)
+    # Verifica se o usuário está autenticado, mas não falha se não estiver
+    user = get_user_info(request)
+    if not user.get("username"):
+        return JSONResponse(content={"error": "Unauthorized"}, status_code=401)
     
     # Query para resumo dos últimos 30 dias
     results = db.query(
@@ -98,4 +106,49 @@ async def get_reports_summary(request: Request, db: Session = Depends(get_db)):
             "total_reais": round((result.total_reais or 0) / 100, 2)
         })
     
-    return JSONResponse(content={"data": data})
+    return JSONResponse(content={
+        "success": True,
+        "data": data
+    })
+
+@router.get("/api/dashboard/summary", response_class=HTMLResponse)
+async def get_dashboard_summary_html(request: Request, db: Session = Depends(get_db)):
+    """API para resumo das vendas em HTML"""
+    try:
+        # Query para resumo dos últimos 7 dias
+        results = db.query(
+            func.date(Order.created_at).label('dia'),
+            func.sum(OrderItem.qty).label('ingressos'),
+            func.sum(OrderItem.qty * OrderItem.unit_price_cents).label('total_reais')
+        ).join(OrderItem).filter(
+            Order.deleted_at.is_(None)
+        ).group_by(func.date(Order.created_at)).order_by(desc('dia')).limit(7).all()
+        
+        # Gerar HTML
+        if not results:
+            return "<div class='text-center py-8 text-gray-500'>Nenhuma venda registrada nos últimos 7 dias</div>"
+        
+        html = "<div class='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4'>"
+        for result in results:
+            # Converter dia para string se necessário
+            if hasattr(result.dia, 'strftime'):
+                dia = result.dia.strftime("%d/%m")
+            else:
+                dia = str(result.dia)[5:10]  # Pega dd/mm do formato YYYY-MM-DD
+            ingressos = result.ingressos or 0
+            total_reais = round((result.total_reais or 0) / 100, 2)
+            
+            html += f"""
+            <div class='bg-slate-50 rounded-lg p-3 text-center'>
+                <div class='text-xs text-slate-500 mb-1'>{dia}</div>
+                <div class='text-lg font-bold'>{ingressos}</div>
+                <div class='text-xs text-slate-600'>ingressos</div>
+                <div class='text-sm font-semibold text-green-600'>R$ {total_reais:.2f}</div>
+            </div>
+            """
+        html += "</div>"
+        
+        return html
+        
+    except Exception as e:
+        return f"<div class='text-red-500 text-center py-8'>Erro: {str(e)}</div>"

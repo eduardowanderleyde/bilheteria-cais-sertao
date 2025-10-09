@@ -38,9 +38,20 @@ app.add_middleware(
 )
 
 # Session middleware
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+if not SECRET_KEY:
+    # Only allow empty secret in development
+    if os.getenv("DEBUG", "true").lower() == "true":
+        import secrets
+        SECRET_KEY = secrets.token_urlsafe(32)
+        print(f"⚠️  WARNING: Using auto-generated SECRET_KEY (development only)")
+        print(f"    Set SECRET_KEY environment variable for production!")
+    else:
+        raise ValueError("SECRET_KEY environment variable is required in production!")
+
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("SECRET_KEY", "change-me"),
+    secret_key=SECRET_KEY,
     https_only=os.getenv("SECURE_COOKIES", "false").lower() == "true",
     same_site="lax",
     session_cookie="session",

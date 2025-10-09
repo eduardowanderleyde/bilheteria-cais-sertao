@@ -39,11 +39,11 @@ pip install -r requirements.txt
 # Copie o arquivo de configuração
 cp config.example .env
 
-# Edite as variáveis conforme necessário
-# DATABASE_URL=sqlite:///./bilheteria.db
-# SECRET_KEY=your-secret-key
-# ADMIN_USERNAME=admin
-# ADMIN_PASSWORD=admin123
+# Edite o arquivo .env e defina valores SEGUROS:
+# IMPORTANTE: Substitua TODOS os valores CHANGE_ME
+# 
+# Exemplo de geração de SECRET_KEY segura:
+# python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 4. **Execute o setup inicial**
@@ -58,18 +58,21 @@ uvicorn app.main:app --reload
 
 6. **Acesse o sistema**
 - **URL:** http://127.0.0.1:8000
-- **Admin:** `admin` / `admin123`
-- **Gestora:** `gestora1` / `gestora123`
-- **Bilheteira:** `bilheteira1` / `bilheteira123`
+- **Usuários:** Conforme configurado no arquivo `.env`
+  - Admin: definido em `ADMIN_USERNAME` e `ADMIN_PASSWORD`
+  - Gestora: `gestora1` (se `GESTORA_PASSWORD` foi definido)
+  - Bilheteiras: `bilheteira1`, `bilheteira2` (se `BILHETEIRA_PASSWORD` foi definido)
 
 ### Deploy em Produção (Render)
 
 1. **Conecte seu repositório** ao Render
-2. **Configure as variáveis de ambiente:**
+2. **Configure as variáveis de ambiente (OBRIGATÓRIO):**
    - `DATABASE_URL` (automático com PostgreSQL)
-   - `SECRET_KEY` (gerado automaticamente)
-   - `ADMIN_USERNAME` (opcional, padrão: admin)
-   - `ADMIN_PASSWORD` (opcional, padrão: admin123)
+   - `SECRET_KEY` - Gere um valor seguro com: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+   - `ADMIN_USERNAME` - Nome do usuário administrador
+   - `ADMIN_PASSWORD` - Senha segura (mínimo 8 caracteres)
+   - `GESTORA_PASSWORD` (opcional) - Senha para usuárias gestoras
+   - `BILHETEIRA_PASSWORD` (opcional) - Senha para bilheteiras
 3. **Deploy automático** - o sistema criará as tabelas e usuários automaticamente
 
 ## 🎯 Funcionalidades
@@ -172,17 +175,24 @@ bilheteria-cais/
 # Banco de dados
 DATABASE_URL=postgresql://user:pass@host:port/db
 
-# Segurança
-SECRET_KEY=your-super-secret-key
+# Segurança - OBRIGATÓRIO
+# Gere com: python -c "import secrets; print(secrets.token_urlsafe(32))"
+SECRET_KEY=<valor_gerado_aleatoriamente_32+_caracteres>
 
-# Usuário admin
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=secure-password
+# Usuário admin - OBRIGATÓRIO
+ADMIN_USERNAME=seu_usuario_admin
+ADMIN_PASSWORD=SuaSenhaForte123!
+
+# Usuários opcionais (deixe vazio para não criar)
+GESTORA_PASSWORD=
+BILHETEIRA_PASSWORD=
 
 # Aplicação
 DEBUG=False
 HOST=0.0.0.0
 PORT=8000
+SECURE_COOKIES=True
+ENV=production
 ```
 
 ### Backup e Restauração
