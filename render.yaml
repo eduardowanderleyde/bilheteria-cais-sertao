@@ -29,5 +29,3 @@ services:
         sync: false  # Optional
       - key: DATABASE_URL
         sync: false  # Manual - set your existing database URL in Render dashboard
-
-# No databases section - using existing PostgreSQL
