@@ -1,2 +1,1 @@
-web: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2
-release: python seed_admin.py
+web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
