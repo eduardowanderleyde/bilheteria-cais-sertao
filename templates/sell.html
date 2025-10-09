@@ -119,6 +119,7 @@
     <button type="submit" class="w-full h-14 mt-4 rounded-xl bg-emerald-700 text-white text-lg">
       🛒 Registrar Venda
     </button>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <a href="/dashboard" class="block text-center mt-3 text-slate-600 hover:text-slate-800">
       ← Voltar ao Dashboard
     </a>

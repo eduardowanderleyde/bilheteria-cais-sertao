@@ -26,6 +26,127 @@ async def reports_page(request: Request):
         "user": get_user_info(request)
     })
 
+@router.get("/reasons", response_class=HTMLResponse)
+async def reports_reasons_page(request: Request):
+    """Reports by discount reasons page"""
+    user = require_auth(request)
+    
+    return templates.TemplateResponse("reports_reasons.html", {
+        "request": request,
+        "user": get_user_info(request)
+    })
+
+@router.get("/groups", response_class=HTMLResponse)
+async def reports_groups_page(request: Request):
+    """Reports groups page"""
+    user = require_auth(request)
+    
+    return templates.TemplateResponse("reports_groups.html", {
+        "request": request,
+        "user": get_user_info(request)
+    })
+
+@router.get("/api/export")
+async def reports_export(
+    request: Request,
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """General reports export (Excel)"""
+    user = require_auth(request)
+    
+    if not can_export(user["role"]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions"
+        )
+    
+    # Parse dates
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else date.today() - timedelta(days=30)
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else date.today()
+    
+    # Query daily data
+    daily_results = db.query(
+        func.date(Order.created_at).label('date'),
+        func.sum(OrderItem.qty).label('total_people'),
+        func.sum(OrderItem.qty * OrderItem.unit_price_cents).label('total_revenue')
+    ).join(OrderItem).filter(
+        and_(
+            func.date(Order.created_at) >= start_dt,
+            func.date(Order.created_at) <= end_dt,
+            Order.deleted_at.is_(None)
+        )
+    ).group_by(func.date(Order.created_at)).order_by('date').all()
+    
+    # Query by ticket type
+    type_results = db.query(
+        func.date(Order.created_at).label('date'),
+        OrderItem.ticket_type,
+        func.sum(OrderItem.qty).label('count')
+    ).join(Order).filter(
+        and_(
+            func.date(Order.created_at) >= start_dt,
+            func.date(Order.created_at) <= end_dt,
+            Order.deleted_at.is_(None)
+        )
+    ).group_by(func.date(Order.created_at), OrderItem.ticket_type).all()
+    
+    # Query by payment method
+    payment_results = db.query(
+        func.date(Order.created_at).label('date'),
+        Order.payment_method,
+        func.sum(OrderItem.qty).label('count')
+    ).join(OrderItem).filter(
+        and_(
+            func.date(Order.created_at) >= start_dt,
+            func.date(Order.created_at) <= end_dt,
+            Order.deleted_at.is_(None)
+        )
+    ).group_by(func.date(Order.created_at), Order.payment_method).all()
+    
+    # Create DataFrames
+    daily_df = pd.DataFrame([
+        {
+            'Data': result.date,
+            'Pessoas': result.total_people,
+            'Receita (R$)': round(result.total_revenue / 100, 2)
+        }
+        for result in daily_results
+    ])
+    
+    type_df = pd.DataFrame([
+        {
+            'Data': result.date,
+            'Tipo': result.ticket_type,
+            'Quantidade': result.count
+        }
+        for result in type_results
+    ])
+    
+    payment_df = pd.DataFrame([
+        {
+            'Data': result.date,
+            'Forma de Pagamento': result.payment_method,
+            'Quantidade': result.count
+        }
+        for result in payment_results
+    ])
+    
+    # Create Excel file
+    with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+        with pd.ExcelWriter(tmp.name, engine='openpyxl') as writer:
+            daily_df.to_excel(writer, sheet_name='Resumo_Diario', index=False)
+            type_df.to_excel(writer, sheet_name='Por_Tipo', index=False)
+            payment_df.to_excel(writer, sheet_name='Por_Pagamento', index=False)
+        tmp_path = tmp.name
+    
+    return FileResponse(
+        tmp_path,
+        filename=f"relatorio_geral_{start_dt}_{end_dt}.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
 @router.get("/by-state")
 async def report_by_state(
     request: Request,

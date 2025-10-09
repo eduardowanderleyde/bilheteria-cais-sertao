@@ -2,14 +2,24 @@
 DATABASE_URL=sqlite:///./bilheteria.db
 # For PostgreSQL: DATABASE_URL=postgresql://user:password@localhost/bilheteria
 
-# Security
-SECRET_KEY=your-secret-key-change-in-production
+# Security - REQUIRED
+# Generate a secure key with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+SECRET_KEY=CHANGE_ME_TO_SECURE_RANDOM_STRING
 
-# Admin User (created by seed_admin.py)
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
+# Admin User - REQUIRED (created by seed_admin.py)
+ADMIN_USERNAME=CHANGE_ME
+ADMIN_PASSWORD=CHANGE_ME_TO_SECURE_PASSWORD
+
+# Optional Users (only created if passwords are provided)
+GESTORA_PASSWORD=
+BILHETEIRA_PASSWORD=
 
 # Application Settings
 DEBUG=True
 HOST=127.0.0.1
 PORT=8000
+
+# Production Settings (uncomment for production)
+# DEBUG=False
+# SECURE_COOKIES=True
+# ENV=production

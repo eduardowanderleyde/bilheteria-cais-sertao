@@ -1,25 +1,12 @@
-services:
-  - type: web
-    name: bilheteria-cais
-    env: python
-    buildCommand: pip install -r requirements.txt && python seed_admin.py
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: bilheteria-db
-          property: connectionString
-      - key: SECRET_KEY
-        generateValue: true
-      - key: ADMIN_USERNAME
-        value: ***REMOVED***
-      - key: ADMIN_PASSWORD
-        value: ***REMOVED***
-    healthCheckPath: /health
-    autoDeploy: true
-
+# Exported from Render on 2025-10-06T18:03:30Z
+version: "1"
 databases:
-  - name: bilheteria-db
-    plan: free
-    databaseName: bilheteria
-    user: bilheteria_user
+- name: bilheteria
+  databaseName: bilheteria
+  user: bilheteria_user
+  plan: free
+  region: oregon
+  ipAllowList:
+  - source: 0.0.0.0/0
+    description: everywhere
+  postgresMajorVersion: "17"

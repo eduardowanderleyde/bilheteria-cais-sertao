@@ -1,5 +1,5 @@
 """Pydantic schemas for request/response validation"""
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -76,7 +76,8 @@ class OrderCreate(BaseModel):
     note: Optional[str] = Field(None, max_length=500)
     items: List[OrderItemCreate] = Field(..., min_items=1)
     
-    @validator('state')
+    @field_validator('state')
+    @classmethod
     def validate_state(cls, v):
         if v and len(v) != 2:
             raise ValueError('State must be 2 characters (UF)')
@@ -112,7 +113,8 @@ class GroupCreate(BaseModel):
     payment_method: PaymentMethod
     items: List[OrderItemCreate] = Field(..., min_items=1)
     
-    @validator('state')
+    @field_validator('state')
+    @classmethod
     def validate_state(cls, v):
         if v and len(v) != 2:
             raise ValueError('State must be 2 characters (UF)')

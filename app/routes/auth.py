@@ -45,10 +45,10 @@ def login(
         print(f"User not found: {username}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Verify password with bcrypt puro (hash está em bytes)
+    # Verify password using the auth module
     try:
-        import bcrypt
-        ok = bcrypt.checkpw(password.encode("utf-8"), user.password_hash)
+        from ..auth import verify_password
+        ok = verify_password(password, user.password_hash)
         print(f"Password verify result: {ok}")
     except Exception as e:
         print(f"DBG verify error: {e}, type: {type(user.password_hash)}")
