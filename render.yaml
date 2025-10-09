@@ -1,12 +1,45 @@
-# Exported from Render on 2025-10-06T18:03:30Z
-version: "1"
+services:
+  # Web Service - FastAPI Application
+  - type: web
+    name: bilheteria-cais-sertao
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: python seed_admin.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - key: DEBUG
+        value: false
+      - key: ENV
+        value: production
+      - key: SECURE_COOKIES
+        value: true
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_USERNAME
+        sync: false  # Manual - set in Render dashboard
+      - key: ADMIN_PASSWORD
+        sync: false  # Manual - set in Render dashboard
+      - key: GESTORA_PASSWORD
+        sync: false  # Optional
+      - key: BILHETEIRA_PASSWORD
+        sync: false  # Optional
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bilheteria-db
+          property: connectionString
+
 databases:
-- name: bilheteria
-  databaseName: bilheteria
-  user: bilheteria_user
-  plan: free
-  region: oregon
-  ipAllowList:
-  - source: 0.0.0.0/0
-    description: everywhere
-  postgresMajorVersion: "17"
+  # PostgreSQL Database
+  - name: bilheteria-db
+    databaseName: bilheteria
+    user: bilheteria_user
+    plan: free
+    region: oregon
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: everywhere
+    postgresMajorVersion: "16"
