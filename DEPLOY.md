@@ -40,18 +40,31 @@ git push origin main
 
 ### 4. Variáveis de Ambiente
 
-Configure as seguintes variáveis no Render:
+⚠️ **IMPORTANTE:** Configure valores SEGUROS para todas as variáveis obrigatórias!
 
 ```bash
-# Obrigatórias
-DATABASE_URL=postgresql://... (automático)
-SECRET_KEY=your-super-secret-key-here
+# OBRIGATÓRIAS
+DATABASE_URL=postgresql://... (automático via Render)
 
-# Opcionais (padrões)
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
+# Gere uma SECRET_KEY segura com:
+# python -c "import secrets; print(secrets.token_urlsafe(32))"
+SECRET_KEY=<valor_gerado_aleatoriamente_min_32_caracteres>
+
+# Credenciais do administrador
+ADMIN_USERNAME=seu_usuario_admin
+ADMIN_PASSWORD=SuaSenhaForte123!
+
+# Configurações de produção
 DEBUG=False
+SECURE_COOKIES=True
+ENV=production
+
+# OPCIONAIS (deixe vazio para não criar)
+GESTORA_PASSWORD=
+BILHETEIRA_PASSWORD=
 ```
+
+**⚠️ NUNCA use senhas padrão ou fracas em produção!**
 
 ### 5. Deploy
 
@@ -75,12 +88,20 @@ heroku create bilheteria-cais
 heroku addons:create heroku-postgresql:mini
 ```
 
-4. **Configure as variáveis:**
+4. **Configure as variáveis (OBRIGATÓRIO):**
 ```bash
-heroku config:set SECRET_KEY=your-secret-key
-heroku config:set ADMIN_USERNAME=admin
-heroku config:set ADMIN_PASSWORD=admin123
+# Gere uma SECRET_KEY segura primeiro:
+# python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+heroku config:set SECRET_KEY=<valor_gerado_seguro>
+heroku config:set ADMIN_USERNAME=seu_usuario_admin
+heroku config:set ADMIN_PASSWORD=SuaSenhaForte123!
+heroku config:set DEBUG=False
+heroku config:set SECURE_COOKIES=True
+heroku config:set ENV=production
 ```
+
+**⚠️ Substitua os valores de exemplo por credenciais seguras!**
 
 5. **Deploy:**
 ```bash
