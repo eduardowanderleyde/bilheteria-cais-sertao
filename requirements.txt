@@ -12,6 +12,7 @@ psycopg[binary]>=3.1.0
 # Authentication & Security
 bcrypt>=4.0.0
 passlib[bcrypt]>=1.7.4
+itsdangerous==2.2.0
 
 # Data processing
 pandas>=2.0.0
