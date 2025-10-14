@@ -12,10 +12,7 @@ echo "✅ Dependencies installed successfully!"
 echo "📊 Creating database tables..."
 python -c "from app.db import engine, Base; Base.metadata.create_all(bind=engine)"
 
-echo "✅ Database tables created!"
-
 echo "👤 Creating admin user and default users..."
 python seed_admin.py
 
 echo "✅ Build completed successfully!"
-

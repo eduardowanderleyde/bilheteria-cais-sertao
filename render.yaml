@@ -5,12 +5,12 @@ services:
     runtime: python
     plan: free
     region: oregon
-    buildCommand: pip install -r requirements.txt
-    startCommand: python seed_admin.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt && python seed_admin.py
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11
+        value: 3.11.9
       - key: DEBUG
         value: false
       - key: ENV
@@ -28,18 +28,4 @@ services:
       - key: BILHETEIRA_PASSWORD
         sync: false  # Optional
       - key: DATABASE_URL
-        fromDatabase:
-          name: bilheteria-db
-          property: connectionString
-
-databases:
-  # PostgreSQL Database
-  - name: bilheteria-db
-    databaseName: bilheteria
-    user: bilheteria_user
-    plan: free
-    region: oregon
-    ipAllowList:
-      - source: 0.0.0.0/0
-        description: everywhere
-    postgresMajorVersion: "16"
+        sync: false  # Manual - set your existing database URL in Render dashboard
