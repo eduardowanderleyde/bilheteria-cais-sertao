@@ -3,7 +3,7 @@ from fastapi import APIRouter, Request, Depends, Query, HTTPException, status
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, desc
+from sqlalchemy import func, and_, desc, case
 from datetime import datetime, date, timedelta
 from typing import Optional
 import pandas as pd
@@ -12,6 +12,154 @@ import os
 from ..db import get_db
 from ..models import Order, OrderItem, Group, GroupVisit
 from ..auth import require_auth, get_user_info, can_export
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from collections import defaultdict
+
+# Helpers para mapeamento de dados
+CASH_NAMES = {"cash", "dinheiro", "especie", "espécie"}
+PIX_NAMES = {"pix"}
+CARD_NAMES = {"cc", "cartao", "cartão", "credito", "crédito", "debit", "debito",
+              "credit", "card", "visa", "master", "elo", "amex", "hipercard"}
+
+def _pm_bucket(pm: str) -> str:
+    s = (pm or "").strip().lower()
+    if s in PIX_NAMES:
+        return "pix"
+    if s in CASH_NAMES:
+        return "cash"
+    # padrão: trata tudo como cartão (coluna CC)
+    return "cc"
+
+def _grat_bucket(reason: str):
+    r = (reason or "").strip().upper()
+    if r in {"DG", "DIA GRATUIDADE"}: return "DG"
+    if r in {"GPD", "PCD"}: return "GPD"
+    return "TG"
+
+def _money(cents): return round((cents or 0)/100, 2)
+
+def _to_date(d):
+    if isinstance(d, date):        # inclui datetime.date
+        return d
+    if isinstance(d, datetime):
+        return d.date()
+    if isinstance(d, str):
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d"):
+            try:
+                return datetime.strptime(d, fmt).date()
+            except ValueError:
+                pass
+    return None
+
+thin = Side(style="thin")
+
+def _write_bordero(ws, start_dt, end_dt, valores_ingresso, linhas):
+    """
+    valores_ingresso = {'inteira': 10.00, 'meia': 5.00}
+    linhas = lista de dicts por dia já agregados
+    """
+    ws.title = "borderô"
+    ws.sheet_view.showGridLines = False
+
+    # Título
+    ws.merge_cells("C6:U6")
+    ws["C6"] = f"BILHETERIA CAIS DO SERTÃO - DETALHAMENTO DA MOVIMENTAÇÃO Nº / {end_dt.year} - GCS"
+    ws["C6"].font = Font(bold=True, size=14)
+    ws["C6"].alignment = Alignment(horizontal="center")
+
+    # Box "Valor do ingresso"
+    ws["C8"] = "VALOR DO INGRESSO"
+    ws["C8"].font = Font(bold=True)
+    ws["C9"], ws["D9"], ws["E9"] = "INTEIRA", f"R$ {valores_ingresso['inteira']:.2f}", ""
+    ws["C10"], ws["D10"], ws["E10"] = "MEIA", f"R$ {valores_ingresso['meia']:.2f}", ""
+    ws.merge_cells("C8:E8")
+
+    # Cabeçalho principal da tabela (linha 12)
+    base_row = 12
+    headers = [
+        ("DATA", 1),
+        ("TIPOS DOS INGRESSOS / PAGAMENTO", 6),
+        ("GRATUIDADE", 3),
+        ("ARRECADAÇÃO", 4),
+        ("PÚBLICO TOTAL DO DIA", 2),
+    ]
+    col = 3  # começa em C
+    for text, span in headers:
+        ws.merge_cells(start_row=base_row, start_column=col,
+                       end_row=base_row, end_column=col+span-1)
+        ws.cell(row=base_row, column=col, value=text).alignment = Alignment(horizontal="center")
+        ws.cell(row=base_row, column=col).font = Font(bold=True)
+        col += span
+
+    # Subcabeçalhos (linha 13)
+    sub_labels = [
+        "DATA",
+        "$$","PIX","CC","$$","PIX","CC",  # INTEIRA e MEIA
+        "DG","GPD","TG",
+        "VALOR EM ESPECIE","VALOR PIX","VALOR CC","RECEITA DO DIA(R$)",
+        "PAGANTES DO DIA","P+G+E DO DIA"
+    ]
+    
+    # Escrever subcabeçalhos
+    for i, label in enumerate(sub_labels, start=3):
+        ws.cell(row=base_row+1, column=i, value=label)
+        ws.cell(row=base_row+1, column=i).font = Font(bold=True)
+        ws.cell(row=base_row+1, column=i).alignment = Alignment(horizontal="center")
+
+    # Larguras das colunas
+    widths = [12] + [8]*6 + [8,8,8] + [16,12,10,18] + [16,16]
+    for i, w in enumerate(widths, start=3):
+        col_letter = ws.cell(row=1, column=i).column_letter
+        ws.column_dimensions[col_letter].width = w
+
+    # Período
+    ws["C11"] = "ADM. EMPETUR / PERÍODO"
+    ws["C11"].font = Font(bold=True)
+    ws["D11"] = f"DE {start_dt:%d.%m} A {end_dt:%d.%m.%Y}"
+
+    # Linhas de dados (começa na linha 14)
+    r = base_row + 2
+    for linha in linhas:
+        day = _to_date(linha["date"])
+        ws.cell(row=r, column=3, value=day.strftime("%d.%m") if day else str(linha["date"] or ""))
+        ws.cell(row=r, column=4, value=int(linha["qtd_int_cash"]))
+        ws.cell(row=r, column=5, value=int(linha["qtd_int_pix"]))
+        ws.cell(row=r, column=6, value=int(linha["qtd_int_cc"]))
+        ws.cell(row=r, column=7, value=int(linha["qtd_meia_cash"]))
+        ws.cell(row=r, column=8, value=int(linha["qtd_meia_pix"]))
+        ws.cell(row=r, column=9, value=int(linha["qtd_meia_cc"]))
+        ws.cell(row=r, column=10, value=int(linha["g_DG"]))
+        ws.cell(row=r, column=11, value=int(linha["g_GPD"]))
+        ws.cell(row=r, column=12, value=int(linha["g_TG"]))
+        ws.cell(row=r, column=13, value=_money(linha["rec_cash"]))
+        ws.cell(row=r, column=14, value=_money(linha["rec_pix"]))
+        ws.cell(row=r, column=15, value=_money(linha["rec_cc"]))
+        ws.cell(row=r, column=16, value=_money(linha["rec_cash"] + linha["rec_pix"] + linha["rec_cc"]))
+        ws.cell(row=r, column=17, value=int(linha["pagantes"]))
+        ws.cell(row=r, column=18, value=int(linha["publico_total"]))
+        r += 1
+
+    # Totais do período
+    ws.cell(row=r, column=3, value="TOTAIS DA SEMANA").font = Font(bold=True)
+    for col_idx in range(4, 19):
+        col_letter = ws.cell(row=1, column=col_idx).column_letter
+        ws.cell(row=r, column=col_idx, value=f"=SUM({col_letter}{base_row+2}:{col_letter}{r-1})").font = Font(bold=True)
+
+    # Assinaturas
+    r += 3
+    ws.cell(row=r, column=3, value="EXECUTIVO SÊNIOR")
+    ws.cell(row=r, column=9, value="VISTO GESTOR")
+    r += 2
+    ws.cell(row=r, column=3, value="_________________")
+    ws.cell(row=r, column=9, value="_________________")
+    r += 1
+    ws.cell(row=r, column=3, value="")
+    ws.cell(row=r, column=9, value="")
+
+    # Bordas nas linhas de dados
+    for rr in range(base_row, r):
+        for cc in range(3, 19):
+            ws.cell(row=rr, column=cc).border = Border(top=thin, left=thin, right=thin, bottom=thin)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -657,4 +805,105 @@ def groups_export_csv(db: Session = Depends(get_db), months: int = 12):
         generate_csv(),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=grupos.csv"}
+    )
+
+@router.get("/bordero-cais")
+async def bordero_cais(
+    request: Request,
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Borderô Cais - Relatório consolidado completo"""
+    user = require_auth(request)
+    
+    if not can_export(user["role"]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions"
+        )
+    
+    # Parse dates - default to last 30 days
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else date.today() - timedelta(days=30)
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else date.today()
+    
+    # Agregação por dia para o borderô
+    rows = (db.query(
+                func.date(Order.created_at).label("d"),
+                OrderItem.ticket_type,
+                Order.payment_method,
+                func.coalesce(func.sum(OrderItem.qty), 0).label("qtd"),
+                func.coalesce(func.sum(OrderItem.qty * OrderItem.unit_price_cents), 0).label("cents"),
+                func.max(OrderItem.discount_reason).label("discount_reason"),
+                func.max(case((OrderItem.unit_price_cents == 0, 1), else_=0)).label("has_free")
+           )
+           .select_from(Order)
+           .join(OrderItem, OrderItem.order_id == Order.id)
+           .filter(Order.deleted_at.is_(None),
+                   Order.created_at >= start_dt,
+                   Order.created_at < (end_dt + timedelta(days=1)))
+           .group_by(func.date(Order.created_at), OrderItem.ticket_type, Order.payment_method)
+           .all())
+
+    by_day = defaultdict(lambda: {
+        "q_int": {"cash":0,"pix":0,"cc":0},
+        "q_meia":{"cash":0,"pix":0,"cc":0},
+        "g":{"DG":0,"GPD":0,"TG":0},
+        "rec":{"cash":0,"pix":0,"cc":0},
+    })
+    
+    # Preencher dados por dia
+    for r in rows:
+        day = _to_date(r.d)
+        pm = _pm_bucket(r.payment_method)
+        tt = (r.ticket_type or "").lower()
+        if (r.cents or 0) == 0:
+            by_day[day]["g"][_grat_bucket(r.discount_reason)] += int(r.qtd or 0)
+        else:
+            if tt == "inteira":
+                by_day[day]["q_int"].setdefault(pm, 0)
+                by_day[day]["q_int"][pm] += int(r.qtd or 0)
+            elif tt == "meia":
+                by_day[day]["q_meia"].setdefault(pm, 0)
+                by_day[day]["q_meia"][pm] += int(r.qtd or 0)
+            by_day[day]["rec"].setdefault(pm, 0)
+            by_day[day]["rec"][pm] += int(r.cents or 0)
+
+    # Montar linhas para o borderô
+    linhas = []
+    for d in sorted(by_day.keys()):
+        b = by_day[d]
+        pagantes = sum(b["q_int"].values()) + sum(b["q_meia"].values())
+        publico = pagantes + b["g"]["DG"] + b["g"]["GPD"] + b["g"]["TG"]
+        linhas.append({
+            "date": d,
+            "qtd_int_cash": b["q_int"]["cash"],
+            "qtd_int_pix":  b["q_int"]["pix"],
+            "qtd_int_cc":   b["q_int"]["cc"],
+            "qtd_meia_cash": b["q_meia"]["cash"],
+            "qtd_meia_pix":  b["q_meia"]["pix"],
+            "qtd_meia_cc":   b["q_meia"]["cc"],
+            "g_DG":  b["g"]["DG"],
+            "g_GPD": b["g"]["GPD"],
+            "g_TG":  b["g"]["TG"],
+            "rec_cash": b["rec"]["cash"],
+            "rec_pix":  b["rec"]["pix"],
+            "rec_cc":   b["rec"]["cc"],
+            "pagantes": pagantes,
+            "publico_total": publico,
+        })
+    
+    # Criar Borderô Cais - Relatório Consolidado
+    with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+        with pd.ExcelWriter(tmp.name, engine='openpyxl') as writer:
+            # Criar aba do borderô
+            ws = writer.book.create_sheet("borderô")
+            _write_bordero(ws, start_dt, end_dt, {"inteira": 10.00, "meia": 5.00}, linhas)
+        
+        tmp_path = tmp.name
+    
+    return FileResponse(
+        tmp_path,
+        filename=f"Borderô_Cais_{start_dt}_{end_dt}.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )

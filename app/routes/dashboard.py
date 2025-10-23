@@ -100,8 +100,14 @@ async def get_reports_summary(request: Request, db: Session = Depends(get_db)):
     # Converter para formato esperado pelo frontend
     data = []
     for result in results:
+        # Verificar se result.dia é string ou date
+        if hasattr(result.dia, 'strftime'):
+            dia_str = result.dia.strftime("%Y-%m-%d")
+        else:
+            dia_str = str(result.dia)
+        
         data.append({
-            "dia": result.dia.strftime("%Y-%m-%d"),
+            "dia": dia_str,
             "ingressos": result.ingressos or 0,
             "total_reais": round((result.total_reais or 0) / 100, 2)
         })
